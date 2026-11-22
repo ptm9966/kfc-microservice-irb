@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: users-service
-          image: your-acr.azurecr.io/users-service:replace-with-tag
+          image: ghcr.io/ptm9966/kfc-usermicroservice-irb:e6c32f172f500ff5515043f7210237f62174d636
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
@@ -50,22 +50,6 @@ spec:
                 secretKeyRef:
                   name: user-service-secrets
                   key: JWT_SECRET
-            - name: AUTH0_DOMAIN
-              value: replace-with-your-auth0-domain
-            - name: AUTH0_ISSUER
-              value: https://replace-with-your-auth0-domain/
-            - name: AUTH0_AUDIENCE
-              value: replace-with-your-api-audience
-            - name: AUTH0_MGMT_CLIENT_ID
-              valueFrom:
-                secretKeyRef:
-                  name: user-service-secrets
-                  key: AUTH0_MGMT_CLIENT_ID
-            - name: AUTH0_MGMT_CLIENT_SECRET
-              valueFrom:
-                secretKeyRef:
-                  name: user-service-secrets
-                  key: AUTH0_MGMT_CLIENT_SECRET
           readinessProbe:
             tcpSocket:
               port: http
@@ -82,5 +66,5 @@ spec:
               cpu: 100m
               memory: 128Mi
             limits:
-              cpu: 500m
-              memory: 512Mi
+              cpu: 100m
+              memory: 128Mi

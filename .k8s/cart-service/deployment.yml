@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: cart-service
-          image: your-acr.azurecr.io/cart-service:replace-with-tag
+          image: ghcr.io/ptm9966/kfc-cartmicroservice-irb:e6c32f172f500ff5515043f7210237f62174d636
           imagePullPolicy: IfNotPresent
           ports:
             - name: http

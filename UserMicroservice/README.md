@@ -10,6 +10,11 @@ This is the User/Auth microservice for the KFC/KGF fullstack application. It han
 - Token verification
 - Secure password storage with salt
 
+## Swagger UI
+
+- Local: `http://localhost:8082/api-docs/`
+- Public: `https://arb-api.qa.bikkam.online/users/api-docs/` (after applying the user-service VirtualService and configuring HTTPS on the gateway)
+
 ## Auth0 email check
 
 `POST /auth/auth0/check-email` checks Auth0 before the frontend opens hosted login or signup.

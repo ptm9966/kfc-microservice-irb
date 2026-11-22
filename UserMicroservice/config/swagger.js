@@ -14,8 +14,8 @@ const options = {
     },
     servers: [
       {
-        url: `http://localhost:${process.env.PORT || 8082}`,
-        description: 'User Microservice Server',
+        url: '/',
+        description: 'Current host',
       },
     ],
     components: {

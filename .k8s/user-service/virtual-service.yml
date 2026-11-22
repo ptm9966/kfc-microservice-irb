@@ -11,6 +11,22 @@ spec:
   http:
     - match:
         - uri:
+            exact: /users/api-docs
+      redirect:
+        uri: /users/api-docs/
+        redirectCode: 301
+    - match:
+        - uri:
+            prefix: /users/api-docs/
+      rewrite:
+        uri: /api-docs/
+      route:
+        - destination:
+            host: users-service.domain-service-v3.svc.cluster.local
+            port:
+              number: 8082
+    - match:
+        - uri:
             prefix: /auth
         - uri:
             exact: /api/me
