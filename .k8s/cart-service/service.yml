@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: cart-service
+  namespace: domain-service-v3
+  labels:
+    app: cart-service
+spec:
+  type: ClusterIP
+  selector:
+    app: cart-service
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+      protocol: TCP

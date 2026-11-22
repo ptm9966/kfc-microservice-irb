@@ -1,0 +1,296 @@
+services:
+  # MongoDB Database for main application
+  mongodb:
+    image: mongo:7.0
+    container_name: kfc-mongodb
+    restart: always
+    ports:
+      - "27018:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: admin123456
+      MONGO_INITDB_DATABASE: kfc-database
+    volumes:
+      - mongodb_data:/data/db
+      - mongodb_config:/data/configdb
+    networks:
+      - kfc-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand({ ping: 1 })"]
+      interval: 10s
+      timeout: 15s
+      retries: 10
+      start_period: 30s
+
+  # MongoDB Database for orders microservice
+  orders-mongodb:
+    image: mongo:7.0
+    container_name: orders-mongodb
+    restart: always
+    ports:
+      - "27019:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: admin123456
+      MONGO_INITDB_DATABASE: orders-database
+    volumes:
+      - orders_mongodb_data:/data/db
+      - orders_mongodb_config:/data/configdb
+    networks:
+      - kfc-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand({ ping: 1 })"]
+      interval: 10s
+      timeout: 15s
+      retries: 10
+      start_period: 30s
+
+  # Cart Microservice
+  cart-service:
+    build:
+      context: ./cartMicroservice
+      dockerfile: Dockerfile
+    container_name: kfc-cart-service
+    restart: always
+    ports:
+      - "8080:8080"
+    environment:
+      NODE_ENV: production
+      PORT: 8080
+      DB_URL: mongodb://admin:admin123456@mongodb:27017/kfc-database?authSource=admin
+      FRONTEND_URL: http://localhost:3000
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - kfc-network
+    volumes:
+      - ./cartMicroservice:/app
+      - /app/node_modules
+    healthcheck:
+      test: curl -f http://localhost:8080/api/cart || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Orders Microservice
+  orders-service:
+    build:
+      context: ./OrdersMicroservice
+      dockerfile: Dockerfile
+    container_name: orders-service
+    restart: always
+    ports:
+      - "8081:8081"
+    environment:
+      NODE_ENV: production
+      PORT: 8081
+      USERS_SERVICE_URL: http://users-service:8082
+      DB_URL: mongodb://admin:admin123456@orders-mongodb:27017/orders-database?authSource=admin
+    depends_on:
+      orders-mongodb:
+        condition: service_healthy
+    networks:
+      - kfc-network
+    volumes:
+      - ./OrdersMicroservice:/app
+      - /app/node_modules
+    healthcheck:
+      test: curl -f http://localhost:8081/health || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # MongoDB Database for users microservice
+  users-mongodb:
+    image: mongo:7.0
+    container_name: users-mongodb
+    restart: always
+    ports:
+      - "27020:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: admin123456
+      MONGO_INITDB_DATABASE: users-database
+    volumes:
+      - users_mongodb_data:/data/db
+      - users_mongodb_config:/data/configdb
+    networks:
+      - kfc-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand({ ping: 1 })"]
+      interval: 10s
+      timeout: 15s
+      retries: 10
+      start_period: 30s
+
+  # User/Auth Microservice
+  users-service:
+    build:
+      context: ./UserMicroservice
+      dockerfile: Dockerfile
+    container_name: users-service
+    restart: always
+    ports:
+      - "8082:8082"
+    environment:
+      NODE_ENV: production
+      PORT: 8082
+      DB_URL: mongodb://admin:admin123456@users-mongodb:27017/users-database?authSource=admin
+      JWT_SECRET: your-super-secret-jwt-key-change-this-in-production
+      AUTH0_ISSUER: https://dev-6l85tc0ex15xt2oe.us.auth0.com/
+      AUTH0_AUDIENCE: http://localhost:8082
+      AUTH0_DOMAIN: dev-6l85tc0ex15xt2oe.us.auth0.com
+      AUTH0_MGMT_CLIENT_ID: ${AUTH0_MGMT_CLIENT_ID}
+      AUTH0_MGMT_CLIENT_SECRET: ${AUTH0_MGMT_CLIENT_SECRET}
+    depends_on:
+      users-mongodb:
+        condition: service_healthy
+    networks:
+      - kfc-network
+    volumes:
+      - ./UserMicroservice:/app
+      - /app/node_modules
+    healthcheck:
+      test: curl -f http://localhost:8082/api-docs || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # MongoDB Database for products microservice
+  products-mongodb:
+    image: mongo:7.0
+    container_name: products-mongodb
+    restart: always
+    ports:
+      - "27021:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: admin123456
+      MONGO_INITDB_DATABASE: products-database
+    volumes:
+      - products_mongodb_data:/data/db
+      - products_mongodb_config:/data/configdb
+      - ./init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js:ro
+    networks:
+      - kfc-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand({ ping: 1 })"]
+      interval: 10s
+      timeout: 15s
+      retries: 10
+      start_period: 30s
+
+  # Product Microservice
+  products-service:
+    build:
+      context: ./ProductMicroservice
+      dockerfile: Dockerfile
+    container_name: products-service
+    restart: always
+    ports:
+      - "8083:8083"
+    environment:
+      NODE_ENV: production
+      PORT: 8083
+      DB_URL: mongodb://admin:admin123456@products-mongodb:27017/products-database?authSource=admin
+    depends_on:
+      products-mongodb:
+        condition: service_healthy
+    networks:
+      - kfc-network
+    volumes:
+      - ./ProductMicroservice:/app
+      - /app/node_modules
+    healthcheck:
+      test: curl -f http://localhost:8083/api-docs || exit 1
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # API Gateway
+  api-gateway:
+    build:
+      context: ./api-gateway
+      dockerfile: Dockerfile
+    container_name: kfc-api-gateway
+    restart: always
+    ports:
+      - "9000:9000"
+    environment:
+      NODE_ENV: production
+      PORT: 9000
+      AUTH0_ISSUER: https://dev-6l85tc0ex15xt2oe.us.auth0.com/
+      AUTH0_AUDIENCE: http://localhost:8082
+      USERS_SERVICE_URL: http://users-service:8082
+      ORDERS_SERVICE_URL: http://orders-service:8081
+      CART_SERVICE_URL: http://cart-service:8080
+      PRODUCTS_SERVICE_URL: http://products-service:8083
+    depends_on:
+      - cart-service
+      - orders-service
+      - users-service
+      - products-service
+    networks:
+      - kfc-network
+
+  # Frontend React Application
+  frontend:
+    build:
+      context: ./Frontend
+      dockerfile: Dockerfile
+      args:
+        REACT_APP_BACKEND_URL: http://localhost:8080
+        REACT_APP_ORDERS_URL: http://localhost:8081
+        REACT_APP_USERS_URL: http://localhost:8082
+        REACT_APP_PRODUCTS_URL: http://localhost:8083
+        REACT_APP_AUTH0_DOMAIN: dev-6l85tc0ex15xt2oe.us.auth0.com
+        REACT_APP_AUTH0_CLIENT_ID: YrM6Y9CEDia7lM1b5UBZJJdD0IY97iDE
+        REACT_APP_AUTH0_CALLBACK_URL: http://localhost:3000/callback
+        REACT_APP_AUTH0_AUDIENCE: http://localhost:8082
+        REACT_APP_AUTH0_SCOPE: openid profile email
+    container_name: kfc-frontend
+    restart: always
+    ports:
+      - "3000:80"
+    environment:
+      REACT_APP_ENV: production
+      REACT_APP_AUTH0_DOMAIN: dev-6l85tc0ex15xt2oe.us.auth0.com
+      REACT_APP_AUTH0_CLIENT_ID: YrM6Y9CEDia7lM1b5UBZJJdD0IY97iDE
+      REACT_APP_AUTH0_CALLBACK_URL: http://localhost:3000/callback
+      REACT_APP_AUTH0_AUDIENCE: http://localhost:8082
+      REACT_APP_AUTH0_SCOPE: openid profile email
+    depends_on:
+      - cart-service
+      - orders-service
+      - users-service
+      - products-service
+      - api-gateway
+    networks:
+      - kfc-network
+
+volumes:
+  mongodb_data:
+    driver: local
+  mongodb_config:
+    driver: local
+  orders_mongodb_data:
+    driver: local
+  orders_mongodb_config:
+    driver: local
+  users_mongodb_data:
+    driver: local
+  users_mongodb_config:
+    driver: local
+  products_mongodb_data:
+    driver: local
+  products_mongodb_config:
+    driver: local
+
+networks:
+  kfc-network:
+    driver: bridge

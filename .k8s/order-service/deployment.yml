@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orders-service
+  namespace: domain-service-v3
+  labels:
+    app: orders-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: orders-service
+  template:
+    metadata:
+      labels:
+        app: orders-service
+    spec:
+      containers:
+        - name: orders-service
+          image: your-acr.azurecr.io/orders-service:replace-with-tag
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8081
+              protocol: TCP
+          env:
+            - name: NODE_ENV
+              value: production
+            - name: PORT
+              value: "8081"
+            - name: MONGO_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: kfc-secrets
+                  key: MONGO_INITDB_ROOT_USERNAME
+            - name: MONGO_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: kfc-secrets
+                  key: MONGO_INITDB_ROOT_PASSWORD
+            - name: MONGO_DATABASE
+              valueFrom:
+                secretKeyRef:
+                  name: kfc-secrets
+                  key: MONGO_INITDB_DATABASE
+            - name: DB_URL
+              value: mongodb://$(MONGO_USERNAME):$(MONGO_PASSWORD)@kfc-mongodb.domain-service-v3.svc.cluster.local:27017/$(MONGO_DATABASE)?authSource=admin
+            - name: USERS_SERVICE_URL
+              value: http://users-service.domain-service-v3.svc.cluster.local:8082
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi

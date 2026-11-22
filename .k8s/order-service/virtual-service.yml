@@ -1,0 +1,19 @@
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: orders-service
+  namespace: domain-service-v3
+spec:
+  hosts:
+    - api.example.com
+  gateways:
+    - kfc-api-gateway
+  http:
+    - match:
+        - uri:
+            prefix: /api/orders
+      route:
+        - destination:
+            host: orders-service.domain-service-v3.svc.cluster.local
+            port:
+              number: 8081

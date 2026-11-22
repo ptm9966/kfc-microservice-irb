@@ -1,0 +1,65 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cart-service
+  namespace: domain-service-v3
+  labels:
+    app: cart-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cart-service
+  template:
+    metadata:
+      labels:
+        app: cart-service
+    spec:
+      containers:
+        - name: cart-service
+          image: your-acr.azurecr.io/cart-service:replace-with-tag
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            - name: NODE_ENV
+              value: production
+            - name: PORT
+              value: "8080"
+            - name: MONGO_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: kfc-secrets
+                  key: MONGO_INITDB_ROOT_USERNAME
+            - name: MONGO_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: kfc-secrets
+                  key: MONGO_INITDB_ROOT_PASSWORD
+            - name: MONGO_DATABASE
+              valueFrom:
+                secretKeyRef:
+                  name: kfc-secrets
+                  key: MONGO_INITDB_DATABASE
+            - name: DB_URL
+              value: mongodb://$(MONGO_USERNAME):$(MONGO_PASSWORD)@kfc-mongodb.domain-service-v3.svc.cluster.local:27017/$(MONGO_DATABASE)?authSource=admin
+          readinessProbe:
+            tcpSocket:
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
