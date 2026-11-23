@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: users-service
-          image: ghcr.io/ptm9966/kfc-usermicroservice-irb:e6c32f172f500ff5515043f7210237f62174d636
+          image: ghcr.io/ptm9966/kfc-usermicroservice-irb:7a14679de7690582cdb5ad478d2c3135f79a1a74
           imagePullPolicy: IfNotPresent
           ports:
             - name: http

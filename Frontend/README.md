@@ -89,11 +89,11 @@ The Next.js app is statically exported to `out/`; Cloudflare Pages serves those 
    - `NEXT_PUBLIC_AUTH0_CALLBACK_URL` (optional; normally leave unset so the site origin is used)
    - `NEXT_PUBLIC_AUTH0_CONNECTION` (optional)
    - `NEXT_PUBLIC_FIRESTORE_VALIDATION_URL`
-   - `NEXT_PUBLIC_USERS_API_URL` (required; public HTTPS base URL for the users service)
-   - `NEXT_PUBLIC_CART_API_URL` (required; public HTTPS base URL for the cart service)
-   - `NEXT_PUBLIC_ORDERS_API_URL` (public HTTPS base URL for the orders service)
+   - `NEXT_PUBLIC_USERS_API_URL` (set to `/api/users` when using the Pages proxy)
+   - `NEXT_PUBLIC_CART_API_URL` (set to `/api/cart` when using the Pages proxy)
+   - `NEXT_PUBLIC_ORDERS_API_URL` (set to `/api/orders` when using the Pages proxy)
 
-   For example, use `https://<your-users-service-domain>`, `https://<your-cart-service-domain>`, and `https://<your-orders-service-domain>` as placeholders, replacing them with the deployed service URLs. The frontend calls `/auth/login` and `/auth/signup` on the users service, `/api/cart` on the cart service, and `/api/orders` on the orders service. Placing an order creates it in the Orders service; the confirmation and order-history pages show the saved items, status, payment method, and total. The order service verifies password-login tokens through the Users service and returns only that user's orders. Configure `USERS_SERVICE_URL` on the Orders service host to a URL it can reach, as described in its README. Auth0 tokens are not supported for order history or order placement yet. Card and UPI payment processing is not integrated; the current payment page records a demo order and payment method. Do not use the local `localhost` values from `.env.example` in production.
+   When using the Pages proxies, the frontend calls `/api/users`, `/api/cart`, and `/api/orders` on its own origin. The Pages Functions forward these paths to the respective services. Placing an order creates it in the Orders service; the confirmation and order-history pages show the saved items, status, payment method, and total. The order service verifies password-login tokens through the Users service and returns only that user's orders. Configure `USERS_SERVICE_URL` on the Orders service host to a URL it can reach, as described in its README. Auth0 tokens are not supported for order history or order placement yet. Card and UPI payment processing is not integrated; the current payment page records a demo order and payment method. Do not use the local `localhost` values from `.env.example` in production.
 
 5. Add these server-side bindings in the Pages project environment settings. Mark credentials as secrets; never use the `NEXT_PUBLIC_` prefix for them.
 
@@ -128,6 +128,7 @@ When prompted, use `kfc-frontend-pages` as the project name. Before each deploym
 ```sh
 npm run build
 npx wrangler pages deploy ./out --project-name kfc-frontend-pages
+
 ```
 
 The project name matches `name` in `wrangler.toml`. Run the deploy command from `Frontend`, where Wrangler can discover the `functions/` directory; this uploads the Pages Functions together with the static `out/` files. For a preview deployment, add `--branch preview`.
@@ -155,9 +156,9 @@ These values are read during the Next.js build. Set them in `.env` before runnin
 | `NEXT_PUBLIC_AUTH0_CALLBACK_URL` | Optional callback URL; otherwise the current site origin plus `/callback` is used |
 | `NEXT_PUBLIC_AUTH0_CONNECTION` | Optional Auth0 connection name |
 | `NEXT_PUBLIC_FIRESTORE_VALIDATION_URL` | Worker base URL used by the login email check |
-| `NEXT_PUBLIC_USERS_API_URL` | Users service base URL for password-based login/signup; use a public HTTPS URL in production |
-| `NEXT_PUBLIC_CART_API_URL` | Cart service base URL; use a public HTTPS URL in production |
-| `NEXT_PUBLIC_ORDERS_API_URL` | Orders service base URL; required for order placement and history, use a public HTTPS URL in production |
+| `NEXT_PUBLIC_USERS_API_URL` | Users service base URL for password-based login/signup; set to `/api/users` when using the Pages proxy |
+| `NEXT_PUBLIC_CART_API_URL` | Cart service base URL; set to `/api/cart` when using the Pages proxy |
+| `NEXT_PUBLIC_ORDERS_API_URL` | Orders service base URL; set to `/api/orders` when using the Pages proxy |
 
 Use a **Content Delivery API (CDA) read token** for published content. The menu is fetched during the build, so changes in Contentful require a new build and deployment. Do not put Contentful management or preview tokens in `NEXT_PUBLIC_*` variables.
 
@@ -173,9 +174,12 @@ AUTH0_MGMT_CLIENT_ID=your-auth0-management-client-id
 AUTH0_MGMT_CLIENT_SECRET=your-auth0-management-client-secret
 FIRESTORE_SYNC_URL=https://your-worker.example.workers.dev
 FIRESTORE_SYNC_SECRET=your-shared-sync-secret
+USERS_SERVICE_HTTP_URL=http://arb-api.qa.bikkam.online
+CART_SERVICE_HTTP_URL=http://arb-api.qa.bikkam.online
+ORDERS_SERVICE_HTTP_URL=http://arb-api.qa.bikkam.online
 ```
 
-Do not commit `.dev.vars`. In Cloudflare Pages project settings, add the same required values as environment variables/secrets for the appropriate deployment environments. `AUTH0_DOMAIN` in `wrangler.toml` is a non-secret local/default variable; set the production value in Cloudflare if it differs.
+Do not commit `.dev.vars`. In Cloudflare Pages project settings, set the build variables `NEXT_PUBLIC_USERS_API_URL=/api/users`, `NEXT_PUBLIC_CART_API_URL=/api/cart`, and `NEXT_PUBLIC_ORDERS_API_URL=/api/orders`. Add the three `*_SERVICE_HTTP_URL` values for the appropriate deployment environments. The Pages Functions proxy requests to these backends over HTTP, avoiding browser mixed-content blocking. The Cloudflare-to-backend leg is unencrypted, so use this proxy for testing only; configure HTTPS on the backends before handling real credentials. These URLs in `wrangler.toml` are non-secret defaults; set them in Cloudflare if they differ. Apply [the cart route](../.k8s/cart-service/arb-api-virtual-service.yml) and [the orders route](../.k8s/order-service/arb-api-virtual-service.yml) to the cluster to expose those paths on the shared `arb-api` host without replacing the existing `api.example.com` routes.
 
 The token endpoint exchanges the authorization code and syncs the profile to the Firestore Worker. The email check in the login page calls the configured validation Worker directly. The Worker must be running and configured with the matching sync secret for those flows to work.
 
@@ -209,6 +213,9 @@ After changing any `NEXT_PUBLIC_*` setting, rebuild the app because these values
 | `app/` | Next.js routes and page UI: home, menu, login, signup, callback, cart, and checkout |
 | `components/` | Shared frontend components such as the site shell |
 | `functions/api/auth0/` | Cloudflare Pages Function endpoints for Auth0 code exchange and email lookup |
+| `functions/api/users/` | Same-origin proxy from the frontend to the Users service |
+| `functions/api/cart/` | Same-origin proxy from the frontend to the Cart service |
+| `functions/api/orders/` | Same-origin proxy from the frontend to the Orders service |
 | `lib/contentful.js` | Contentful menu/category fetching and data normalization during build |
 | `lib/orders.js` | Authenticated order creation and retrieval from the Orders microservice |
 | `public/` | Static images, icons, and other assets copied to the site |

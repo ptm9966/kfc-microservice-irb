@@ -1,13 +1,13 @@
 apiVersion: networking.istio.io/v1
 kind: VirtualService
 metadata:
-  name: orders-service
+  name: orders-service-arb-api
   namespace: domain-service-v3
 spec:
   hosts:
-    - api.example.com
+    - arb-api.qa.bikkam.online
   gateways:
-    - kfc-api-gateway
+    - app-gateway
   http:
     - match:
         - uri:

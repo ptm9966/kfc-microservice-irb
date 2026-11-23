@@ -1,4 +1,4 @@
-export const CART_API_BASE_URL = process.env.NEXT_PUBLIC_CART_API_URL || 'http://localhost:8080';
+export const CART_API_BASE_URL = process.env.NEXT_PUBLIC_CART_API_URL || '/api/cart';
 
 function getAuthHeaders() {
   const token = localStorage.getItem('id_token') || localStorage.getItem('token') || localStorage.getItem('auth_token');
@@ -6,7 +6,7 @@ function getAuthHeaders() {
 }
 
 export async function fetchCartItems() {
-  const response = await fetch(`${CART_API_BASE_URL}/api/cart`, {
+  const response = await fetch(CART_API_BASE_URL, {
     headers: getAuthHeaders(),
   });
 
@@ -19,7 +19,7 @@ export async function fetchCartItems() {
 }
 
 export async function removeCartItem(itemId) {
-  const response = await fetch(`${CART_API_BASE_URL}/api/cart/${encodeURIComponent(itemId)}`, {
+  const response = await fetch(`${CART_API_BASE_URL}/${encodeURIComponent(itemId)}`, {
     method: 'DELETE',
     headers: getAuthHeaders(),
   });

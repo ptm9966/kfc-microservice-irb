@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 
-const CART_API_BASE_URL = process.env.NEXT_PUBLIC_CART_API_URL || 'http://localhost:8080';
+const CART_API_BASE_URL = process.env.NEXT_PUBLIC_CART_API_URL || '/api/cart';
 const FALLBACK_IMAGE = 'https://images.unsplash.com/photo-1562967916-eb82221dfb92?auto=format&fit=crop&w=900&q=80';
 
 function getSafeImageUrl(rawImage) {
@@ -55,7 +55,7 @@ export default function MenuClient({ items }) {
         qty: 1,
       };
 
-      const response = await fetch(`${CART_API_BASE_URL}/api/cart`, {
+      const response = await fetch(CART_API_BASE_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

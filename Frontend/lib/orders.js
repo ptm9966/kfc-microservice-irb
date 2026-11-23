@@ -1,4 +1,4 @@
-const ORDERS_API_BASE_URL = process.env.NEXT_PUBLIC_ORDERS_API_URL || 'http://localhost:8081';
+const ORDERS_API_BASE_URL = process.env.NEXT_PUBLIC_ORDERS_API_URL || '/api/orders';
 
 function getOrderToken() {
   return localStorage.getItem('token') || localStorage.getItem('id_token') || localStorage.getItem('auth_token');
@@ -31,7 +31,7 @@ async function requestOrderApi(path, options = {}) {
 }
 
 export async function fetchOrders() {
-  const orders = await requestOrderApi('/api/orders');
+  const orders = await requestOrderApi('');
   if (!Array.isArray(orders)) {
     throw new Error('The Orders service returned an invalid order list.');
   }
@@ -39,7 +39,7 @@ export async function fetchOrders() {
 }
 
 export async function createOrder(orderDetails) {
-  const response = await requestOrderApi('/api/orders', {
+  const response = await requestOrderApi('', {
     method: 'POST',
     body: JSON.stringify(orderDetails),
   });
@@ -52,5 +52,5 @@ export async function createOrder(orderDetails) {
 }
 
 export async function fetchOrderById(orderId) {
-  return requestOrderApi(`/api/orders/${encodeURIComponent(orderId)}`);
+  return requestOrderApi(`/${encodeURIComponent(orderId)}`);
 }
