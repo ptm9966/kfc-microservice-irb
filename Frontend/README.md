@@ -128,6 +128,7 @@ When prompted, use `kfc-frontend-pages` as the project name. Before each deploym
 ```sh
 npm run build
 npx wrangler pages deploy ./out --project-name kfc-frontend-pages
+npx wrangler pages deploy ./out --project-name kfc-frontend-pages --branch main
 
 ```
 
