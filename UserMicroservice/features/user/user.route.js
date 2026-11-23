@@ -344,50 +344,44 @@ userRouter.post("/verify", async (req, res) => {
  * @swagger
  * /auth/singleuser:
  *   post:
- *     summary: Get user details from token or ID
- *     description: Return the current user profile using the JWT token or the user ID.
+ *     summary: Get the authenticated user's details
+ *     description: Return the current user's profile using a password-login token.
  *     tags:
  *       - Authentication
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               id:
- *                 type: string
- *                 example: "<jwt-token> or <user-id>"
+ *     security:
+ *       - BearerAuth: []
  *     responses:
  *       200:
  *         description: User details retrieved
+ *       401:
+ *         description: Missing or invalid password-login token
  *       404:
  *         description: User not found
  */
 userRouter.post("/singleuser", async (req, res) => {
-    const { id } = req.body;
+    const authorization = req.headers.authorization || "";
+    const match = /^Bearer\s+([^\s]+)$/i.exec(authorization);
+    if (!match) {
+        return res.status(401).send({ message: "Authorization token required" });
+    }
 
-    if (!id) {
-        return res.status(400).send({ message: "User token or ID is required" });
+    let decoded;
+    try {
+        decoded = jwt.verify(match[1], process.env.JWT_SECRET || 'default-secret');
+    } catch (error) {
+        return res.status(401).send({ message: "Invalid token" });
     }
 
     try {
-        let user;
-
-        if (typeof id === "string" && id.split(".").length === 3) {
-            const decoded = jwt.verify(id, process.env.JWT_SECRET || 'default-secret');
-            user = await Users.findById(decoded.userId).select("-passwordHash -passwordSalt");
-        } else {
-            user = await Users.findById(id).select("-passwordHash -passwordSalt");
-        }
-
+        const user = await Users.findById(decoded.userId).select("-passwordHash -passwordSalt");
         if (!user) {
             return res.status(404).send({ message: "User not found" });
         }
 
         res.send(user);
     } catch (error) {
-        res.status(404).send({ message: "Please enter correct token or user ID" });
+        console.error("Unable to retrieve authenticated user:", error);
+        res.status(500).send({ message: "Unable to retrieve user profile" });
     }
 });
 

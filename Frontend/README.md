@@ -93,7 +93,7 @@ The Next.js app is statically exported to `out/`; Cloudflare Pages serves those 
    - `NEXT_PUBLIC_CART_API_URL` (set to `/api/cart` when using the Pages proxy)
    - `NEXT_PUBLIC_ORDERS_API_URL` (set to `/api/orders` when using the Pages proxy)
 
-   When using the Pages proxies, the frontend calls `/api/users`, `/api/cart`, and `/api/orders` on its own origin. The Pages Functions forward these paths to the respective services. Placing an order creates it in the Orders service; the confirmation and order-history pages show the saved items, status, payment method, and total. The order service verifies password-login tokens through the Users service and returns only that user's orders. Configure `USERS_SERVICE_URL` on the Orders service host to a URL it can reach, as described in its README. Auth0 tokens are not supported for order history or order placement yet. Card and UPI payment processing is not integrated; the current payment page records a demo order and payment method. Do not use the local `localhost` values from `.env.example` in production.
+   When using the Pages proxies, the frontend calls `/api/users`, `/api/cart`, and `/api/orders` on its own origin. The Pages Functions forward these paths to the corresponding API Gateway host: `users.arb-api.qa.bikkam.online`, `cart.arb-api.qa.bikkam.online`, and `orders.arb-api.qa.bikkam.online`. Istio sends all three hosts to the Express API Gateway, which dispatches internally to each service. Signup and login remain public; protected requests require a valid password-login token verified by Users. Cart records are scoped to that user, and the Cart service also verifies tokens itself. Orders continue to verify tokens through Users and return only that user's orders. Auth0 tokens are not supported for cart or order operations. Card and UPI payment processing is not integrated; the current payment page records a demo order and payment method. Do not use the local `localhost` values from `.env.example` in production.
 
 5. Add these server-side bindings in the Pages project environment settings. Mark credentials as secrets; never use the `NEXT_PUBLIC_` prefix for them.
 
@@ -174,12 +174,12 @@ AUTH0_MGMT_CLIENT_ID=your-auth0-management-client-id
 AUTH0_MGMT_CLIENT_SECRET=your-auth0-management-client-secret
 FIRESTORE_SYNC_URL=https://your-worker.example.workers.dev
 FIRESTORE_SYNC_SECRET=your-shared-sync-secret
-USERS_SERVICE_HTTP_URL=http://arb-api.qa.bikkam.online
-CART_SERVICE_HTTP_URL=http://arb-api.qa.bikkam.online
-ORDERS_SERVICE_HTTP_URL=http://arb-api.qa.bikkam.online
+USERS_SERVICE_HTTP_URL=http://users.arb-api.qa.bikkam.online
+CART_SERVICE_HTTP_URL=http://cart.arb-api.qa.bikkam.online
+ORDERS_SERVICE_HTTP_URL=http://orders.arb-api.qa.bikkam.online
 ```
 
-Do not commit `.dev.vars`. In Cloudflare Pages project settings, set the build variables `NEXT_PUBLIC_USERS_API_URL=/api/users`, `NEXT_PUBLIC_CART_API_URL=/api/cart`, and `NEXT_PUBLIC_ORDERS_API_URL=/api/orders`. Add the three `*_SERVICE_HTTP_URL` values for the appropriate deployment environments. The Pages Functions proxy requests to these backends over HTTP, avoiding browser mixed-content blocking. The Cloudflare-to-backend leg is unencrypted, so use this proxy for testing only; configure HTTPS on the backends before handling real credentials. These URLs in `wrangler.toml` are non-secret defaults; set them in Cloudflare if they differ. Apply [the cart route](../.k8s/cart-service/arb-api-virtual-service.yml) and [the orders route](../.k8s/order-service/arb-api-virtual-service.yml) to the cluster to expose those paths on the shared `arb-api` host without replacing the existing `api.example.com` routes.
+Do not commit `.dev.vars`. In Cloudflare Pages project settings, set the build variables `NEXT_PUBLIC_USERS_API_URL=/api/users`, `NEXT_PUBLIC_CART_API_URL=/api/cart`, and `NEXT_PUBLIC_ORDERS_API_URL=/api/orders`. Add the three `*_SERVICE_HTTP_URL` values for the appropriate deployment environments. The Pages Functions proxy requests to the matching API Gateway host over HTTP, avoiding browser mixed-content blocking. The Cloudflare-to-origin leg is unencrypted until TLS is configured on the Istio ingress gateway; use this only for testing and configure HTTPS before handling real credentials. These URLs in `wrangler.toml` are non-secret defaults; set them in Cloudflare if they differ. Create proxied Cloudflare DNS records for all three API hosts pointing to the Istio ingress public IP, then apply the [API Gateway manifests](../.k8s/api-gateway/) and [Istio host configuration](../.k8s/app-gateway/app-gateway.yml) with the Users, Cart, and Orders VirtualServices. The API Gateway and Cart service need network access to the Users service for password-token verification.
 
 The token endpoint exchanges the authorization code and syncs the profile to the Firestore Worker. The email check in the login page calls the configured validation Worker directly. The Worker must be running and configured with the matching sync secret for those flows to work.
 

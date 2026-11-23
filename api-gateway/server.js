@@ -1,10 +1,11 @@
 const express = require("express");
 const cors = require("cors");
 const dotenv = require("dotenv");
-const checkJwt = require("./middleware/auth");
-const routes = require("./routes");
-
 dotenv.config();
+
+const checkJwt = require("./middleware/auth");
+const serviceHostRouter = require("./middleware/serviceHostRouter");
+const routes = require("./routes");
 
 const app = express();
 const port = process.env.PORT || 9000;
@@ -16,6 +17,7 @@ app.get("/health", (req, res) => {
   res.json({ status: "ok", service: "api-gateway" });
 });
 
+app.use(serviceHostRouter);
 app.use(checkJwt);
 app.use("/api", routes);
 

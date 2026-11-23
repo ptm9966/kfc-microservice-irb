@@ -1,13 +1,18 @@
 const { Schema, model } = require("mongoose");
 
-const cartSchema= new Schema({
-    image:String,
-    title:String,
-    desc:String,
-    price:Number,
-    _id:String,
-    qty:Number
-})
+const cartSchema = new Schema({
+  userId: { type: String, required: true },
+  productId: { type: String, required: true },
+  image: String,
+  title: String,
+  desc: String,
+  price: Number,
+  qty: Number,
+});
 
-const Cart = model("cart",cartSchema)
-module.exports= Cart;
+cartSchema.index(
+  { userId: 1, productId: 1 },
+  { unique: true, partialFilterExpression: { userId: { $type: "string" } } }
+);
+
+module.exports = model("cart", cartSchema);

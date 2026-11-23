@@ -1,11 +1,14 @@
 # Backend - Node.js Application
 
-KFC React App Backend API built with Express.js and MongoDB.
+KFC Cart microservice built with Express.js and MongoDB. Every cart endpoint
+requires a password-login bearer token verified by the Users service. Cart
+items are stored and queried per verified user; a `userId` supplied in the
+request body is ignored.
 
 ## Prerequisites
 
-- **Node.js**: Version 14.x or higher (16.x LTS recommended)
-- **npm**: Version 6.x or higher
+- **Node.js**: Version 20 or higher
+- **npm**: Version 10 or higher
 - **MongoDB**: Local or cloud instance (MongoDB Atlas)
 
 ## Installation
@@ -27,6 +30,7 @@ Create a `.env` file in the Backend folder with the following credentials:
 ```env
 # Port Configuration
 PORT=8080
+USERS_SERVICE_URL=http://localhost:8082
 
 # Database Configuration - MongoDB Connection String
 DB_URL=mongodb+srv://<username>:<password>@<cluster-name>.mongodb.net/<database-name>?retryWrites=true&w=majority
@@ -43,6 +47,7 @@ FRONTEND_URL=http://localhost:3000
 | Variable | Description | Example |
 |----------|-------------|---------|
 | `PORT` | Server port | `8080` |
+| `USERS_SERVICE_URL` | Users service URL used to verify bearer tokens | `http://localhost:8082` |
 | `DB_URL` | MongoDB connection string | `mongodb+srv://user:pass@cluster.mongodb.net/db` |
 | `FRONTEND_URL` | Frontend application URL | `http://localhost:3000` |
 
@@ -100,21 +105,16 @@ Listening at http://localhost:8080
 
 ## API Endpoints
 
-### Authentication Routes
-- `POST /auth/login` - User login
-- `POST /auth/signup` - User registration
-
-### Product Routes
-- `GET /api/products` - Get all products
-- `POST /api/products` - Add product (Admin only)
-- `PUT /api/products/:id` - Update product (Admin only)
-- `DELETE /api/products/:id` - Delete product (Admin only)
-
 ### Cart Routes
-- `GET /api/cart` - Get user cart
-- `POST /api/cart` - Add item to cart
-- `PUT /api/cart/:id` - Update cart item
-- `DELETE /api/cart/:id` - Remove item from cart
+- `GET /api/cart` - Get the authenticated user's cart
+- `POST /api/cart` - Add or increment an item in the authenticated user's cart
+- `PATCH /api/cart/:cartId` - Update an owned cart item
+- `DELETE /api/cart/:cartId` - Remove an owned cart item
+- `DELETE /api/cart` - Clear the authenticated user's cart
+
+Send `Authorization: Bearer <password-login-token>` with each cart request.
+The Cart service validates the token by calling `POST /auth/verify` on Users.
+Legacy cart records without a verified owner are not returned.
 
 ## CORS Configuration
 

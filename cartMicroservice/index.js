@@ -13,6 +13,10 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
+app.get("/health", (req, res) => {
+  res.json({ status: "ok", service: "cart-service" });
+});
+
 // Swagger Documentation
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpecs, {
   customCss: '.swagger-ui { font-family: Arial, sans-serif; }',

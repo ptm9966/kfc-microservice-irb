@@ -14,21 +14,27 @@ internal `ClusterIP` `Service` resources.
 
 ```text
 Browser
-  ├── https://www.example.com
-  │     └── Cloudflare Pages (static frontend)
-  └── https://api.example.com
-        └── Cloudflare proxy, WAF, and rate limits
-              └── Azure Load Balancer public IP
-                    └── AKS Istio external ingress gateway (Envoy)
-                          └── Istio Gateway and VirtualService routes
-                                ├── cart-service
-                                ├── orders-service
-                                ├── users-service
-                                └── products-service (if required)
+  └── https://bikkam.online
+        └── Cloudflare Pages (static frontend)
+              └── same-origin Pages Functions (/api/users, /api/cart, /api/orders)
+                    ├── http://users.arb-api.qa.bikkam.online
+                    ├── http://cart.arb-api.qa.bikkam.online
+                    └── http://orders.arb-api.qa.bikkam.online
+                          └── Cloudflare DNS proxy and WAF
+                                └── Azure Load Balancer public IP
+                                      └── AKS Istio ingress gateway (Envoy)
+                                            └── Istio Gateway and VirtualServices
+                                                  └── Express api-gateway:9000
+                                                        ├── users-service:8082
+                                                        ├── cart-service:8080
+                                                        └── orders-service:8081
 ```
 
-In this design, Cloudflare points to the public IP of the Istio ingress
-gateway's Azure Load Balancer Service. Azure Application Gateway,
+Each DNS hostname reaches the same API Gateway; Express selects the upstream
+using the preserved `Host` header. The Pages Functions keep browser requests
+same-origin and forward each path to its matching hostname. Cloudflare points
+the three API hostnames to the public IP of the Istio ingress gateway's Azure
+Load Balancer Service. Azure Application Gateway,
 Application Gateway for Containers, and AGIC are not in the target traffic
 path. AKS still uses Azure Load Balancer to expose the Istio gateway Service;
 that is not the same as retaining an Application Gateway.
@@ -44,26 +50,23 @@ updates yourself.
 
 ## API route map
 
-Use the shared `api.example.com` host and preserve the existing paths. The
-Istio routes below do not require URL rewrites.
+Use a DNS hostname per service. Istio sends every hostname to the Express API
+Gateway; Express performs the service dispatch without rewriting the path.
 
-| Host and path | AKS Service | Port | Routes |
+| Host and path | Istio destination | Express upstream | Routes |
 | --- | --- | ---: | --- |
-| `api.example.com/api/cart` and `/api/cart/{cartId}` | `cart-service` | 8080 | Read, add, update, and remove cart items |
-| `api.example.com/api/orders` and `/api/orders/{orderId}` | `orders-service` | 8081 | List, create, and retrieve orders |
-| `api.example.com/api/orders/{orderId}/status` | `orders-service` | 8081 | Update order status |
-| `api.example.com/auth/*` | `users-service` | 8082 | Login, signup, profile, and token verification |
-| `api.example.com/api/me` | `users-service` | 8082 | Auth0 token validation |
-| `api.example.com/api/product*` | `products-service` | 8083 | Product APIs, if required by the frontend |
+| `users.arb-api.qa.bikkam.online/auth/signup`, `/auth/login`, `/auth/profile` | `api-gateway:9000` | `users-service:8082` | Public signup/login; protected profile and user APIs |
+| `users.arb-api.qa.bikkam.online/api/me` | `api-gateway:9000` | `users-service:8082` | Auth0 token validation by Users |
+| `cart.arb-api.qa.bikkam.online/api/cart` and `/api/cart/{cartId}` | `api-gateway:9000` | `cart-service:8080` | Authenticated, user-scoped cart |
+| `orders.arb-api.qa.bikkam.online/api/orders` and `/api/orders/{orderId}` | `api-gateway:9000` | `orders-service:8081` | Authenticated order creation and retrieval |
+| `orders.arb-api.qa.bikkam.online/api/orders/{orderId}/status` | `api-gateway:9000` | `orders-service:8081` | Status update; still needs an admin-role check |
 
 Route definitions live in [Cart](./cartMicroservice/features/cart/cart.route.js),
 [Orders](./OrdersMicroservice/features/order/order.route.js),
-[Users](./UserMicroservice/features/user/user.route.js), and
-[Products](./ProductMicroservice/features/product/product.route.js).
+[Users](./UserMicroservice/features/user/user.route.js).
 
-Keep `/api-docs` private or protect it with Cloudflare Access. Each service uses
-the same docs path; don't expose all docs through a shared path without
-separate hosts or explicit path rewrites.
+Users Swagger UI is available at `/api-docs` only after password-token
+authentication through the API Gateway.
 
 ## AKS deployment steps
 
@@ -72,14 +75,13 @@ separate hosts or explicit path rewrites.
 1. Select an AKS Kubernetes version supported by the pinned upstream Istio
    release. Check Istio's current support policy and AKS networking
    compatibility.
-2. Build each service image, push it to Azure Container Registry, and deploy
-   each service as a `Deployment` plus a private `ClusterIP` `Service`.
+2. Build and push the API Gateway and Cart service images using the repository
+   workflow. Deploy them as a `Deployment` plus a private `ClusterIP` `Service`.
 3. Keep databases private and persistent. Store database URLs, JWT signing
    keys, and Auth0 credentials in Azure Key Vault or Kubernetes Secrets, not
    committed manifests or `.env` files.
-4. Add readiness and liveness endpoints to Cart, Users, and Products. Orders
-   currently has `/health`; don't use Swagger UI or a business endpoint as a
-   Kubernetes health probe.
+4. The API Gateway, Cart, and Orders services expose `/health`; Users uses a
+   TCP probe in the current manifest.
 
 ### 2. Install upstream Istio with `istioctl`
 
@@ -142,17 +144,17 @@ without a tested migration window.
 
 ### 3. Add application routing
 
-Create an Istio `Gateway` for `api.example.com`, then attach `VirtualService`
-rules to route paths to the Kubernetes Services. The following is a starting
-template; set the actual namespace, certificate secret, and service ports used
-by the AKS deployment.
+Apply the project manifests in this order: API Gateway Deployment and Service,
+Istio Gateway, then the Users, Cart, and Orders VirtualServices. The Gateway
+accepts all three service hosts, and each VirtualService routes the complete
+host to `api-gateway.domain-service-v3.svc.cluster.local:9000`. For example:
 
 ```yaml
 apiVersion: networking.istio.io/v1
 kind: Gateway
 metadata:
-  name: kfc-api-gateway
-  namespace: kfc
+  name: app-gateway
+  namespace: domain-service-v3
 spec:
   selector:
     istio: ingressgateway
@@ -161,71 +163,32 @@ spec:
         number: 80
         name: http
         protocol: HTTP
-      tls:
-        httpsRedirect: true
       hosts:
-        - api.example.com
-    - port:
-        number: 443
-        name: https
-        protocol: HTTPS
-      tls:
-        mode: SIMPLE
-        credentialName: api-example-com-tls
-      hosts:
-        - api.example.com
----
-apiVersion: networking.istio.io/v1
-kind: VirtualService
-metadata:
-  name: kfc-api-routes
-  namespace: kfc
-spec:
-  hosts:
-    - api.example.com
-  gateways:
-    - kfc-api-gateway
-  http:
-    - match:
-        - uri:
-            prefix: /api/cart
-      route:
-        - destination:
-            host: cart-service.kfc.svc.cluster.local
-            port:
-              number: 8080
-    - match:
-        - uri:
-            prefix: /api/orders
-      route:
-        - destination:
-            host: orders-service.kfc.svc.cluster.local
-            port:
-              number: 8081
-    - match:
-        - uri:
-            exact: /api/me
-        - uri:
-            prefix: /auth
-      route:
-        - destination:
-            host: users-service.kfc.svc.cluster.local
-            port:
-              number: 8082
-    - match:
-        - uri:
-            prefix: /api/product
-      route:
-        - destination:
-            host: products-service.kfc.svc.cluster.local
-            port:
-              number: 8083
+        - users.arb-api.qa.bikkam.online
+        - cart.arb-api.qa.bikkam.online
+        - orders.arb-api.qa.bikkam.online
 ```
 
-The TLS secret referenced by `credentialName` must be available in the
-`istio-system` namespace used by the ingress gateway. Set Cloudflare to
-**Full (strict)** only after the gateway presents a valid certificate for
-`api.example.com`.
+Run the repository's manual image-build workflow first so the Cart and API
+Gateway `latest` images are published. Then apply the updated workloads and
+routes:
+
+```bash
+kubectl apply -f .k8s/cart-service/deployment.yml
+kubectl apply -f .k8s/api-gateway/service.yml
+kubectl apply -f .k8s/api-gateway/deployment.yml
+kubectl apply -f .k8s/app-gateway/app-gateway.yml
+kubectl apply -f .k8s/user-service/virtual-service.yml
+kubectl apply -f .k8s/cart-service/virtual-service.yml
+kubectl apply -f .k8s/order-service/virtual-service.yml
+kubectl rollout status deployment/cart-service -n domain-service-v3
+kubectl rollout status deployment/api-gateway -n domain-service-v3
+```
+
+The checked-in Gateway currently listens on HTTP port 80 only. Do not configure
+Cloudflare **Full (strict)** until a valid origin certificate and HTTPS
+listener have been installed. HTTP from Cloudflare to the origin is suitable
+only for testing; use TLS at the ingress for production.
 
 Enable sidecar injection for application workloads that need mesh policies or
 telemetry. Routing through the ingress gateway can work without sidecars, but
@@ -246,45 +209,53 @@ kubectl get pods,svc -n istio-system
 
 ### 4. Configure Cloudflare DNS and TLS
 
-1. Add a proxied DNS record for `api.example.com` pointing to the Istio
-   ingress gateway's stable public IP.
-2. Install a certificate for `api.example.com` at the Istio ingress gateway.
-3. Set Cloudflare SSL/TLS mode to **Full (strict)**.
-4. Consider Cloudflare WAF and rate limits. Restrict direct access to the
+1. Add proxied DNS records for `users.arb-api.qa.bikkam.online`,
+   `cart.arb-api.qa.bikkam.online`, and `orders.arb-api.qa.bikkam.online`, all pointing
+   to the Istio ingress gateway's stable public IP.
+2. The current ingress is HTTP-only. For production, install a certificate
+   covering all three names, add an HTTPS listener, and set Cloudflare SSL/TLS
+   mode to **Full (strict)**.
+3. Consider Cloudflare WAF and rate limits. Restrict direct access to the
    gateway origin where compatible with the AKS Load Balancer configuration.
+4. After the new hosts pass validation and Pages bindings are updated, remove
+   the old shared `arb-api.qa.bikkam.online` record and routes if no other
+   clients still depend on them.
 
 References: [Cloudflare proxied DNS](https://developers.cloudflare.com/dns/proxy-status/)
 and [Full (strict) TLS](https://developers.cloudflare.com/ssl/origin-configuration/ssl-modes/full-strict/).
 
 ### 5. Configure Cloudflare Pages
 
-With the shared API host, set the frontend's Production and Preview build
-variables to the same public origin:
+Keep the frontend API URLs same-origin so its Pages Functions proxy requests:
 
 ```dotenv
-NEXT_PUBLIC_CART_API_URL=https://api.example.com
-NEXT_PUBLIC_ORDERS_API_URL=https://api.example.com
-NEXT_PUBLIC_USERS_API_URL=https://api.example.com
+NEXT_PUBLIC_USERS_API_URL=/api/users
+NEXT_PUBLIC_CART_API_URL=/api/cart
+NEXT_PUBLIC_ORDERS_API_URL=/api/orders
 ```
 
 Use the variable names from [Frontend/.env.example](./Frontend/.env.example).
 `NEXT_PUBLIC_*` values are included in browser code and are not secrets. Set
 them in the Pages project environment and rebuild/redeploy after changes.
-Keep database URLs, signing keys, and other credentials in server-side secret
-storage.
+Set the server-side Pages bindings to the matching HTTP origin:
 
-The Pages site and API host are cross-origin. Allow the exact deployed Pages
-origin in backend CORS, including `Authorization` and `Content-Type` headers
-and the required `GET`, `POST`, `PATCH`, and `DELETE` methods. Do not rely on
-wildcard CORS as an access-control mechanism.
+```dotenv
+USERS_SERVICE_HTTP_URL=http://users.arb-api.qa.bikkam.online
+CART_SERVICE_HTTP_URL=http://cart.arb-api.qa.bikkam.online
+ORDERS_SERVICE_HTTP_URL=http://orders.arb-api.qa.bikkam.online
+```
+
+The HTTP origin leg is unencrypted until ingress TLS is configured, so do not
+use it for production credentials. Keep database URLs, signing keys, and other
+credentials in server-side secret storage.
 
 ### 6. Keep service-to-service traffic inside AKS
 
-Orders verifies password-login tokens by calling Users. Set `USERS_SERVICE_URL`
-to the internal Kubernetes Service name, for example
-`http://users-service:8082` when both services are in the same namespace, or
-the fully qualified service DNS name if they are in different namespaces.
-Don't send internal service traffic through Cloudflare or the public ingress.
+The API Gateway and both the Cart and Orders services verify password-login
+tokens by calling Users. Set `USERS_SERVICE_URL` to the internal Kubernetes
+Service name; the included manifests use
+`http://users-service.domain-service-v3.svc.cluster.local:8082`. Do not send
+internal service traffic through Cloudflare or the public ingress.
 
 ## Safely remove the existing gateway
 
@@ -300,10 +271,9 @@ there is nothing to delete. Otherwise, use a staged cutover:
    subnet, identities, role assignments, DNS records, and any other workloads
    using it. Back up/export its configuration.
 2. Deploy and validate the Istio ingress gateway while the old gateway remains
-   available. Test `api.example.com` against the Istio IP using a temporary
-   hosts override or `curl --resolve`, including HTTPS certificate validation,
-   all API routes, and CORS.
-3. Change the Cloudflare `api.example.com` origin to the Istio ingress IP.
+   available. Test each service hostname against the Istio IP using
+   `curl --resolve`, including the expected host header and all API routes.
+3. Point the three Cloudflare API hostnames at the Istio ingress IP.
    Keep the old gateway and its public IP available for rollback while
    monitoring errors and traffic.
 4. After the new route is stable, remove the old Kubernetes `Ingress`,
@@ -324,23 +294,22 @@ Gateway for Containers deployment.
 
 The Compose file also defines a separate Node.js service named `api-gateway`
 on port 9000. It is not Azure Application Gateway or an Istio ingress
-gateway. The Express service currently validates Auth0 JWTs for its `/api/*`
-routes and proxies requests to the microservices. Istio `Gateway` and
-`VirtualService` resources provide routing; they do not automatically replace
-that JWT validation.
+gateway. The new hostname routes all terminate at this Express service, which
+dispatches by hostname and validates password-login tokens through Users.
+Signup and login are public. The older path-based `/api/*` routes retain their
+Auth0 JWT validation; they are not the route used by the three service
+hostnames.
 
 Before removing the Express service:
 
 1. Verify that no frontend, client, or other service calls its port or
-   `/api/*` proxy routes. The current Next.js environment template uses
-   per-service API base URLs, but verify deployed clients and logs as well.
-2. Decide where its Auth0 authorization will live. Migrate the required
-   validation to Istio `RequestAuthentication`/`AuthorizationPolicy` or to the
-   individual services, and test every supported token type. Orders currently
-   verifies password-login tokens through Users; Auth0 order tokens are not
-   supported.
-3. Ensure direct routes to Cart, Orders, Users, and Products have the
-   necessary service-level authorization before bypassing the proxy.
+   hostname routes before changing the deployment. The Pages Functions call
+   the three service hostnames; verify deployed clients and logs as well.
+2. Decide where password-token verification will live and test every supported
+   token type. The current Cart and Orders services verify password-login
+   tokens through Users; Auth0 tokens are not supported for those operations.
+3. Ensure direct routes to Cart, Orders, and Users have service-level
+   authorization before bypassing the proxy.
 4. After a successful cutover and a no-traffic observation period, remove the
    Express gateway Deployment/Service from AKS and its service definition from
    Compose if it is no longer needed.
@@ -349,13 +318,15 @@ Before removing the Express service:
 
 Resolve these existing API limitations before exposing the services publicly:
 
-- **Cart:** endpoints currently have no authentication or per-user ownership
-  and operate on a shared collection. Add user-scoped storage and authorization.
+- **Cart:** the updated API requires password-token verification and stores
+  items by user. Existing cart documents without a user owner are not visible
+  in authenticated carts and should be handled separately if they must be
+  migrated.
 - **Orders:** `PATCH /api/orders/{orderId}/status` currently has no
   authentication. Restrict it to an authorized staff/admin role.
-- **Users:** `/auth/singleuser` accepts a user ID and returns profile fields
-  without requiring authentication. Require authentication and self-access,
-  or remove ID-based lookup.
+- **Users:** `/auth/singleuser` now returns only the authenticated user's
+  profile; don't restore ID-based lookup without an explicit authorization
+  policy.
 - **Products:** product create, update, and delete routes should require an
   authorized admin role if routed publicly.
 - **Profile updates:** the User service currently has no profile `PUT` or
@@ -367,11 +338,14 @@ Resolve these existing API limitations before exposing the services publicly:
 - `istio-ingressgateway` has a healthy external IP.
 - The Istio `Gateway` accepts the expected host and presents the correct TLS
   certificate.
-- Each route reaches the correct AKS `ClusterIP` Service without path rewrites.
-- CORS preflight succeeds from the deployed Pages origin.
+- Each hostname reaches the Express API Gateway, which dispatches to the
+  correct AKS `ClusterIP` Service without path rewrites.
+- Signup/login work without a token; protected routes reject missing or
+  invalid password-login tokens.
 - Authentication works for the selected login/token flow.
 - Orders reaches Users using Kubernetes DNS, not the public gateway.
-- Cloudflare DNS is proxied and Full (strict) TLS succeeds.
+- All three Cloudflare DNS records are proxied; Full (strict) TLS succeeds
+  after an HTTPS ingress listener and certificate are configured.
 - Swagger and administrative write APIs are not exposed without appropriate
   access control.
 

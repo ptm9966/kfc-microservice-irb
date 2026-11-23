@@ -12,4 +12,6 @@ spec:
         name: http
         protocol: HTTP
       hosts:
-        - "arb-api.qa.bikkam.online"
+        - "users.arb-api.qa.bikkam.online"
+        - "cart.arb-api.qa.bikkam.online"
+        - "orders.arb-api.qa.bikkam.online"

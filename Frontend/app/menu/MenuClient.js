@@ -19,7 +19,7 @@ function updateCartCount(nextCount) {
 }
 
 function getAuthHeaders() {
-  const token = localStorage.getItem('id_token') || localStorage.getItem('token') || localStorage.getItem('auth_token');
+  const token = localStorage.getItem('token') || localStorage.getItem('auth_token') || localStorage.getItem('id_token');
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 

@@ -5,15 +5,15 @@ metadata:
   namespace: domain-service-v3
 spec:
   hosts:
-    - arb-api.qa.bikkam.online
+    - cart.arb-api.qa.bikkam.online
   gateways:
     - app-gateway
   http:
     - match:
         - uri:
-            prefix: /api/cart
+            prefix: /
       route:
         - destination:
-            host: cart-service.domain-service-v3.svc.cluster.local
+            host: api-gateway.domain-service-v3.svc.cluster.local
             port:
-              number: 8080
+              number: 9000

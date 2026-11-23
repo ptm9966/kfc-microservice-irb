@@ -46,13 +46,24 @@ jobs:
        working-directory: cartMicroservice
        run: |
           docker --version
-          docker build -f Dockerfile -t ghcr.io/ptm9966/kfc-cartmicroservice-irb:${{ github.sha }} .
+          docker build -f Dockerfile \
+            -t ghcr.io/ptm9966/kfc-cartmicroservice-irb:${{ github.sha }} \
+            -t ghcr.io/ptm9966/kfc-cartmicroservice-irb:latest .
           docker images
+     - name: "api-gateway-image-build"
+       working-directory: api-gateway
+       run: |
+          docker build -f Dockerfile \
+            -t ghcr.io/ptm9966/kfc-api-gateway-irb:${{ github.sha }} \
+            -t ghcr.io/ptm9966/kfc-api-gateway-irb:latest .
 
 
      - name: "Push image to github"
        run: |
           docker push ghcr.io/ptm9966/kfc-cartmicroservice-irb:${{ github.sha }}
+          docker push ghcr.io/ptm9966/kfc-cartmicroservice-irb:latest
+          docker push ghcr.io/ptm9966/kfc-api-gateway-irb:${{ github.sha }}
+          docker push ghcr.io/ptm9966/kfc-api-gateway-irb:latest
           docker push ghcr.io/ptm9966/kfc-usermicroservice-irb:${{ github.sha }}
           docker push ghcr.io/ptm9966/kfc-productmicroservice-irb:${{ github.sha }}
           docker push ghcr.io/ptm9966/kfc-ordersmicroservice-irb:${{ github.sha }}

@@ -41,7 +41,7 @@ const options = {
         },
         CartItemInput: {
           type: 'object',
-          description: 'Provide one of _id, productId, or id to identify the product.',
+          description: 'Provide productId, _id, or id as the product identifier. The response _id identifies the cart item.',
           properties: {
             _id: { type: 'string' },
             productId: { type: 'string' },

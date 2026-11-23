@@ -1,7 +1,7 @@
 export const CART_API_BASE_URL = process.env.NEXT_PUBLIC_CART_API_URL || '/api/cart';
 
 function getAuthHeaders() {
-  const token = localStorage.getItem('id_token') || localStorage.getItem('token') || localStorage.getItem('auth_token');
+  const token = localStorage.getItem('token') || localStorage.getItem('auth_token') || localStorage.getItem('id_token');
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
