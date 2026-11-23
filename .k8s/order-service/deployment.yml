@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: orders-service
-          image: ghcr.io/ptm9966/kfc-ordersmicroservice-irb:e6c32f172f500ff5515043f7210237f62174d636
+          image: ghcr.io/ptm9966/kfc-ordersmicroservice-irb:latest
           imagePullPolicy: IfNotPresent
           ports:
             - name: http

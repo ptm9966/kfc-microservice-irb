@@ -28,19 +28,25 @@ jobs:
        working-directory: OrdersMicroservice
        run: |
           docker --version
-          docker build -f Dockerfile -t ghcr.io/ptm9966/kfc-ordersmicroservice-irb:${{ github.sha }} .
+          docker build -f Dockerfile \
+            -t ghcr.io/ptm9966/kfc-ordersmicroservice-irb:${{ github.sha }} \
+            -t ghcr.io/ptm9966/kfc-ordersmicroservice-irb:latest .
           docker images
      - name: "ProductMicroservice-api-image-build"
        working-directory: ProductMicroservice
        run: |
           docker --version
-          docker build -f Dockerfile -t ghcr.io/ptm9966/kfc-productmicroservice-irb:${{ github.sha }} .
+          docker build -f Dockerfile \
+            -t ghcr.io/ptm9966/kfc-productmicroservice-irb:${{ github.sha }} \
+            -t ghcr.io/ptm9966/kfc-productmicroservice-irb:latest .
           docker images
      - name: "UserMicroservice-api-image-build"
        working-directory: UserMicroservice
        run: |
           docker --version
-          docker build -f Dockerfile -t ghcr.io/ptm9966/kfc-usermicroservice-irb:${{ github.sha }} .
+          docker build -f Dockerfile \
+            -t ghcr.io/ptm9966/kfc-usermicroservice-irb:${{ github.sha }} \
+            -t ghcr.io/ptm9966/kfc-usermicroservice-irb:latest .
           docker images
      - name: "cartMicroservice-api-image-build"
        working-directory: cartMicroservice
@@ -65,8 +71,11 @@ jobs:
           docker push ghcr.io/ptm9966/kfc-api-gateway-irb:${{ github.sha }}
           docker push ghcr.io/ptm9966/kfc-api-gateway-irb:latest
           docker push ghcr.io/ptm9966/kfc-usermicroservice-irb:${{ github.sha }}
+          docker push ghcr.io/ptm9966/kfc-usermicroservice-irb:latest
           docker push ghcr.io/ptm9966/kfc-productmicroservice-irb:${{ github.sha }}
+          docker push ghcr.io/ptm9966/kfc-productmicroservice-irb:latest
           docker push ghcr.io/ptm9966/kfc-ordersmicroservice-irb:${{ github.sha }}
+          docker push ghcr.io/ptm9966/kfc-ordersmicroservice-irb:latest
     
 
 
