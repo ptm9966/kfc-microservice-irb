@@ -48,7 +48,13 @@ export function createHttpServiceProxy({ envKey, serviceName, stripPrefix = '' }
     origin.search = requestUrl.search;
 
     try {
-      const upstreamResponse = await fetch(new Request(origin, request));
+      const requestForOrigin = new Request(origin, request);
+      const requestHeaders = new Headers(requestForOrigin.headers);
+      requestHeaders.delete('host');
+
+      const upstreamResponse = await fetch(
+        new Request(requestForOrigin, { headers: requestHeaders }),
+      );
       const headers = new Headers(upstreamResponse.headers);
       headers.set('Cache-Control', 'no-store');
 
