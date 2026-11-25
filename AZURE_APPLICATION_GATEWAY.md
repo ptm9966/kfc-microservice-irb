@@ -1,554 +1,227 @@
-# Azure Application Gateway Setup for KFC React Application
+# Azure Application Gateway for KFC Microservices
 
 ## Overview
 
-Azure Application Gateway is a layer-7 (Application Layer) load balancer that can route traffic based on URL paths, hostnames, and HTTP headers. This guide explains how to use it for your full-stack KFC application.
+This guide describes the planned KFC architecture: Cloudflare Pages sends API
+requests through Azure Application Gateway v2 to a private Istio ingress
+gateway in AKS. The existing per-service hostnames remain in use.
 
-## Architecture Overview
+> **Plan only:** do not switch the public API DNS records or make Istio ingress
+> private until the Application Gateway route is configured and validated.
+> The current interim setup sends traffic directly to the public Istio
+> ingress.
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                         Internet Users                           │
-└────────────────────────────┬────────────────────────────────────┘
-                             │
-                             ▼
-        ┌────────────────────────────────────────┐
-        │   Azure Application Gateway            │
-        │   - SSL/TLS Termination                │
-        │   - URL-based routing                  │
-        │   - Request/Response rewrites          │
-        │   - WAF Protection                     │
-        └────────────┬──────────────┬────────────┘
-                     │              │
-        ┌────────────▼──┐   ┌──────▼──────────┐
-        │  Frontend VM  │   │  Backend VM     │
-        │ (React App)   │   │ (Node.js Server)│
-        │ Port 3000     │   │ Port 8080       │
-        └───────────────┘   └─────────────────┘
-```
+## Target architecture
 
-## Components Needed
+```text
+Public:
+Browser → Cloudflare Pages → Pages Function
+        → users/cart/orders.arb-api.qa.bikkam.online
+        → Cloudflare wildcard DNS → Application Gateway public IP
+        → Application Gateway wildcard listener and rule
+        → Istio internal LoadBalancer (private IP)
+        → Istio Gateway / service VirtualServices
+        → Express API Gateway → Users / Cart / Orders ClusterIP Services
 
-### 1. **Azure Virtual Network (VNet)**
-- Host your VMs and Application Gateway
-- Provides network isolation and security
-
-### 2. **Azure VMs**
-- **Frontend VM**: Running React application (port 3000)
-- **Backend VM**: Running Node.js/Express server (port 8080)
-
-### 3. **Azure Application Gateway**
-- Routes requests based on URL paths
-- Handles SSL/TLS encryption
-- Load balances between backend pools
-
-### 4. **Azure Storage Account** (Optional)
-- Store application logs and backups
-
-## Application Gateway Configuration
-
-### Step 1: Create Application Gateway Resource
-
-**In Azure Portal:**
-1. Create new resource → "Application Gateway"
-2. **Basics:**
-   - Name: `kfc-app-gateway`
-   - Tier: Standard v2
-   - Enable autoscaling: Yes (2-10 instances)
-
-3. **Frontends:**
-   - Create public IP address
-   - Add HTTPS listener (if using SSL certificate)
-
-### Step 2: Configure Backend Pools
-
-#### Pool 1: Frontend Pool
-```
-Name: frontend-pool
-Target Type: Virtual Machine
-Targets: Frontend VM (private IP)
-Port: 3000
-Protocol: HTTP
+Private Azure VNet:
+Client → Azure Private DNS service hostname
+       → Istio internal LoadBalancer (private IP)
+       → Istio Gateway / service VirtualServices
+       → Express API Gateway → Users / Cart / Orders ClusterIP Services
 ```
 
-#### Pool 2: Backend API Pool
-```
-Name: backend-pool
-Target Type: Virtual Machine
-Targets: Backend VM (private IP)
-Port: 8080
-Protocol: HTTP
-```
+The listener accepts the three service hostnames. Application Gateway forwards
+the request to Istio without overriding its original `Host` header. Istio
+matches that hostname to its VirtualService; the Express API Gateway then
+dispatches to the appropriate Kubernetes Service.
 
-### Step 3: Create HTTP Settings
+## Listener and multi-site explained
 
-#### For Frontend
-```
-Name: frontend-http-settings
-Protocol: HTTP
-Port: 3000
-Cookie-based affinity: Disabled
-Host override: Use backend target's FQDN
-```
+A **listener** is the Application Gateway frontend entry point. It binds a
+frontend IP address to a protocol and port and can match one or more
+hostnames. Here, it listens on the public frontend IP over HTTP port 80 and
+matches API hostnames under `arb-api.qa.bikkam.online`.
 
-#### For Backend
-```
-Name: backend-http-settings
-Protocol: HTTP
-Port: 8080
-Cookie-based affinity: Disabled
-Host override: Leave empty or use backend FQDN
-```
+A **multi-site listener** distinguishes requests that share the same frontend
+IP, protocol, and port by examining the HTTP `Host` header. It does not need
+separate public IPs or gateways for Users, Cart, and Orders.
 
-### Step 4: Configure URL Path-Based Routing Rules
+The wildcard hostname `*.arb-api.qa.bikkam.online` matches
+`users.arb-api.qa.bikkam.online`, `cart.arb-api.qa.bikkam.online`, and
+`orders.arb-api.qa.bikkam.online`. A **Basic listener** does not select a site
+by hostname. This is separate from the routing rule type: the listener is
+multi-site, and it can be associated with a **Basic routing rule** that sends
+all matching paths to one backend.
 
-**Rule 1: Frontend Route**
-```
-Rule Name: frontend-rule
-Listener: 
-  - Name: frontend-listener
-  - Protocol: HTTPS (or HTTP)
-  - Port: 443 (or 80)
-  - Hostname: example.com
+If other, more-specific listeners share the same frontend, give their rules a
+higher priority (a lower numeric value) than the wildcard rule. Application
+Gateway v2 rule priorities must be unique.
 
-Path-based routing:
-  - Path: /*
-  - Backend pool: frontend-pool
-  - HTTP settings: frontend-http-settings
-```
+## Wildcard multi-site listener
 
-**Rule 2: API Route**
-```
-Rule Name: api-rule
-Listener: 
-  - Name: api-listener
-  - Protocol: HTTPS (or HTTP)
-  - Port: 443 (or 80)
-  - Hostname: api.example.com (or api/* path)
+Create one listener with these settings:
 
-Path-based routing:
-  - Path: /api/*
-  - Backend pool: backend-pool
-  - HTTP settings: backend-http-settings
-```
+| Setting | Value |
+| --- | --- |
+| Listener name | `arb-api-wildcard-listener` |
+| SKU | Standard_v2 or WAF_v2 |
+| Frontend IP | Public |
+| Protocol and port | HTTP, 80 (QA only; use HTTPS in production) |
+| Listener type | Multi-site |
+| Hostname mode | Wildcard / multiple hostnames |
+| Hostname | `*.arb-api.qa.bikkam.online` |
 
-### Step 5: Add Rewrite Rules (Optional but Recommended)
+Use the wildcard only for these APIs if no unrelated services need other
+hostnames under that DNS suffix.
 
-**Rewrite Rule: Remove /api prefix when forwarding to backend**
-```
-Rule Set Name: api-rewrite
+## Backend pool and HTTP settings
 
-Condition:
-- Variable: http_request_uri
-- Pattern: ^/api/(.*)
-- Action: URL rewrite
-- Rewrite URL: /{1}
-```
+Create the backend pool:
 
-This way:
-- `example.com/api/product` → Backend receives `/product`
-- `example.com/api/cart` → Backend receives `/cart`
+| Setting | Value |
+| --- | --- |
+| Name | `istio-backend-pool` |
+| Target type | IP address |
+| Target | Istio internal LoadBalancer private IP |
 
-## Detailed Routing Configuration
+`10.0.10.50` is an example private IP only. Replace it with the actual address
+assigned to the Istio ingress LoadBalancer and confirm it is available in the
+correct AKS subnet. Do not use the example unless it is actually assigned.
 
-### Scenario 1: Single Domain with Path-Based Routing
+Configure the backend HTTP setting:
 
-**User requests:**
-- `https://myapp.example.com/` → Routes to Frontend (React)
-- `https://myapp.example.com/api/product` → Routes to Backend API
+| Setting | Value |
+| --- | --- |
+| Name | `istio-http-settings` |
+| Protocol and port | HTTP, 80 |
+| Hostname override | No |
 
-**Application Gateway Configuration:**
-```
-Listener: myapp.example.com:443 (HTTPS)
+Do not replace the incoming host with the backend IP; Istio needs the original
+service hostname to select its VirtualService. Verify host preservation using
+requests through Application Gateway.
 
-Path-based routing rules:
-  ├─ Path: /api/*
-  │  └─ Backend Pool: backend-pool
-  │     HTTP Settings: backend-http-settings
-  └─ Path: /*
-     └─ Backend Pool: frontend-pool
-        HTTP Settings: frontend-http-settings
-```
+Configure a custom health probe if the default probe reports the backend
+unhealthy. For example, use HTTP port 80, path `/health`, and a Host value
+accepted by the Istio Gateway, such as `users.arb-api.qa.bikkam.online`.
+Confirm the probe receives a successful response through the ingress route.
 
-### Scenario 2: Multiple Domains
+## Routing rule
 
-**User requests:**
-- `https://app.example.com/` → Routes to Frontend
-- `https://api.example.com/` → Routes to Backend
+Create one **Basic routing rule**:
 
-**Application Gateway Configuration:**
-```
-Listener 1: app.example.com:443
-  └─ Backend Pool: frontend-pool
-  
-Listener 2: api.example.com:443
-  └─ Backend Pool: backend-pool
-```
+| Setting | Value |
+| --- | --- |
+| Rule name | `arb-api-wildcard-rule` |
+| Rule type | Basic |
+| Listener | `arb-api-wildcard-listener` |
+| Backend pool | `istio-backend-pool` |
+| Backend setting | `istio-http-settings` |
+| Priority | Unique; more-specific hostname rules take precedence |
 
-## SSL/TLS Configuration
+The Basic rule sends all paths accepted by this listener to the same Istio
+backend. That is sufficient because Istio and the Express API Gateway handle
+the per-service routing after Application Gateway.
 
-### Step 1: Upload SSL Certificate
+## Public and private DNS
 
-1. Go to Application Gateway → Listeners
-2. Create HTTPS listener
-3. Upload SSL certificate (.pfx or .pem)
-4. Enable HTTPS redirect from HTTP
+The Cloudflare DNS **zone** is `bikkam.online`. A zone ID identifies that DNS
+zone; it is not a DNS record or a hostname. Add the wildcard record inside the
+existing zone.
 
-### Step 2: Backend HTTPS (Optional)
+For public access, create one wildcard **A** record in Cloudflare:
 
-If backend also uses HTTPS:
-```
-HTTP Settings:
-- Protocol: HTTPS
-- Port: 443 (or 8443)
-- Pick hostname from backend target
-- Create custom probe to verify backend health
-```
+| Setting | Value |
+| --- | --- |
+| Name | `*.arb-api.qa` |
+| Type | A |
+| Address | Application Gateway public IP |
+| Example address | `74.235.49.137` (example only; use the assigned IP) |
 
-## Health Probes
+Cloudflare appends `.bikkam.online`, so this record resolves service names
+such as `users.arb-api.qa.bikkam.online` to Application Gateway. Set the
+Cloudflare proxy status according to the intended Cloudflare proxy/WAF
+configuration. The public record must point to Application Gateway, never to
+Istio's private IP.
 
-### Frontend Health Probe
-```
-Name: frontend-probe
-Protocol: HTTP
-Host: <frontend-vm-ip>
-Port: 3000
-Path: /
-Interval: 30 seconds
-Timeout: 30 seconds
-Healthy threshold: 2
-Unhealthy threshold: 3
+Create an Azure Private DNS zone named `arb-api.qa.bikkam.online`, link it to
+the AKS VNet and any client VNets that need private access, and add these A
+records:
+
+| Record name | Type | Address |
+| --- | --- | --- |
+| `users` | A | Istio internal LoadBalancer private IP |
+| `cart` | A | Istio internal LoadBalancer private IP |
+| `orders` | A | Istio internal LoadBalancer private IP |
+
+For example, if the Istio private IP is `10.0.10.50`, all three records point
+to that address. Private DNS resolves only for clients using the linked VNet
+DNS path (or connected networks configured to use that path); it does not
+make the private IP reachable from the public Internet.
+
+If the Application Gateway backend pool targets a literal IP, it does not
+need Private DNS to resolve that target. Link the zone to the Application
+Gateway VNet only if the gateway or its backend configuration needs to resolve
+the private service names.
+
+## Istio routing
+
+Keep the separate Istio VirtualServices and their exact hostnames. Each should
+route to the internal Express API Gateway Service. For example:
+
+```yaml
+spec:
+  hosts:
+    - users.arb-api.qa.bikkam.online
+  gateways:
+    - app-gateway
 ```
 
-### Backend Health Probe
-```
-Name: backend-probe
-Protocol: HTTP
-Host: <backend-vm-ip>
-Port: 8080
-Path: /api/product (or any available endpoint)
-Interval: 30 seconds
-Timeout: 30 seconds
-Healthy threshold: 2
-Unhealthy threshold: 3
+```yaml
+spec:
+  hosts:
+    - orders.arb-api.qa.bikkam.online
+  gateways:
+    - app-gateway
 ```
 
-## CORS Configuration
-
-### Update Backend Express Server
-
-```javascript
-// In Backend/index.js
-const cors = require("cors");
-
-app.use(cors({
-  origin: ["https://myapp.example.com", "https://app.example.com"],
-  credentials: true,
-  methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
-  allowedHeaders: ["Content-Type", "Authorization"]
-}));
-```
-
-### Application Gateway Request/Response Headers
-
-**Request Header Modification Rule:**
-```
-Rule Set: add-headers
-
-Condition: Match all
-Actions:
-  - Add request header
-    Name: X-Forwarded-For
-    Value: {http_request_headers}
-  - Add request header
-    Name: X-Forwarded-Proto
-    Value: https
-```
-
-## Frontend React Configuration
-
-### Update API Base URL
-
-**Create `.env` file in React app:**
-```
-REACT_APP_API_URL=https://myapp.example.com/api
-```
-
-Or if using different domain:
-```
-REACT_APP_API_URL=https://api.example.com
-```
-
-**Update API calls in React:**
-```javascript
-// utils/api.js or services/api.js
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8080';
-
-export const fetchProducts = async () => {
-  const response = await fetch(`${API_BASE_URL}/product`);
-  return response.json();
-};
-
-export const login = async (credentials) => {
-  const response = await fetch(`${API_BASE_URL}/auth/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(credentials)
-  });
-  return response.json();
-};
-```
-
-## WAF (Web Application Firewall) - Optional
-
-### Enable WAF on Application Gateway
-
-1. **WAF Policy:**
-   - Protection Mode: Detection or Prevention
-   - Managed Rules: OWASP CRS (Core Rule Set)
-   - Custom Rules: Add specific rules for your app
-
-2. **Common Rules to Add:**
-   ```
-   - Block SQL Injection attempts
-   - Block XSS attempts
-   - Block malicious bots
-   - Rate limiting per IP
-   ```
-
-3. **Example Custom Rule:**
-   ```
-   Name: block-suspicious-agents
-   Priority: 1
-   Rule Type: Geo-match
-   Match Variables: RemoteAddr
-   Operator: GeoMatch
-   Values: [List of blocked countries]
-   Action: Block
-   ```
-
-## Load Balancing & Auto-Scaling
-
-### Auto-scale Backend Pool
-
-```
-Backend Pool: backend-pool
-  ├─ Current VMs: 1
-  ├─ Min instances: 1
-  ├─ Max instances: 5
-  └─ Scale based on:
-     - CPU usage > 70%
-     - Memory usage > 80%
-```
-
-### Round-robin Load Balancing
-
-**HTTP Settings:**
-```
-Load balancing algorithm: Round robin
-Connection Draining: 30 seconds
-Session affinity: Disabled (or Enabled if needed)
-```
-
-## Monitoring & Logging
-
-### Enable Diagnostics
-
-1. **Application Gateway Logs:**
-   - Access logs
-   - Performance logs
-   - Firewall logs (if WAF enabled)
-
-2. **Log Destinations:**
-   - Azure Storage Account
-   - Log Analytics Workspace
-   - Event Hub
-
-3. **Alerts to Configure:**
-   ```
-   - Backend pool health status
-   - CPU usage > 80%
-   - Memory usage > 80%
-   - Request count threshold exceeded
-   - 5xx errors rate > 5%
-   ```
-
-### Sample Monitoring Query (KQL)
-```kusto
-AzureDiagnostics
-| where ResourceProvider == "MICROSOFT.NETWORK" and ResourceType == "APPLICATIONGATEWAYS"
-| where httpStatus_d >= 500
-| summarize Count=count() by httpStatus_d, clientIP_s
-| sort by Count desc
-```
-
-## DNS Configuration
-
-### Point Domain to Application Gateway
-
-1. **Get Application Gateway Public IP:**
-   ```
-   In Azure Portal → Application Gateway → Overview → Public IP Address
-   ```
-
-2. **Update DNS Records:**
-   ```
-   Type: A (or CNAME)
-   Name: myapp
-   Value: <public-ip-address>
-   TTL: 3600
-   ```
-
-3. **Example DNS Setup:**
-   ```
-   myapp.example.com      A    203.0.113.45
-   api.example.com        A    203.0.113.45
-   *.myapp.example.com    A    203.0.113.45
-   ```
-
-## Cost Estimation
-
-| Component | Estimated Cost/Month |
-|-----------|----------------------|
-| Application Gateway (Standard v2) | $20-30 |
-| Data processed | ~$0.60 per GB |
-| New connections | ~$0.009 per connection |
-| Application Gateway hours | ~$15-20 |
-| **Total** | **$50-100** |
-
-*Note: Costs vary by region and usage*
-
-## Security Best Practices
-
-### 1. Network Security
-- Place VMs in private subnets
-- Use Network Security Groups (NSGs)
-- Enable DDoS Protection
-
-### 2. Application Security
-- Enable WAF with OWASP CRS
-- Use HTTPS/SSL only
-- Implement rate limiting
-- Enable request logging
-
-### 3. Access Control
-- Use Azure AD for authentication
-- Implement role-based access control (RBAC)
-- Restrict backend access to Application Gateway only
-
-### 4. Certificate Management
-- Use Azure Key Vault for SSL certificates
-- Auto-renew certificates before expiration
-- Use strong cipher suites (TLS 1.2+)
-
-## Troubleshooting Common Issues
-
-### Issue 1: Backend Returns 502 Bad Gateway
-
-**Causes:**
-- Backend service not running
-- Health probe failing
-- Network connectivity issue
-
-**Solutions:**
-```
-1. Verify backend VM is running
-2. Check health probe settings
-3. Verify Security Groups allow traffic
-4. Check backend logs
-```
-
-### Issue 2: CORS Errors in Browser Console
-
-**Cause:** Frontend and backend on different origins
-
-**Solution:**
-```javascript
-// Backend CORS configuration
-app.use(cors({
-  origin: process.env.FRONTEND_URL,
-  credentials: true
-}));
-```
-
-### Issue 3: SSL Certificate Errors
-
-**Cause:** Certificate not properly configured
-
-**Solution:**
-```
-1. Verify certificate is valid (not expired)
-2. Ensure certificate includes all domains
-3. Check certificate is in correct format
-4. Verify backend SSL settings if HTTPS
-```
-
-### Issue 4: Request Timeout (504 Gateway Timeout)
-
-**Cause:** Backend request takes too long
-
-**Solution:**
-```
-Increase timeout in HTTP Settings:
-  - Request timeout: 180 seconds (default)
-  - Connection idle timeout: 60 seconds
-```
-
-## Migration Steps
-
-### Phase 1: Preparation
-1. Create VMs in Azure
-2. Deploy frontend (React) on VM
-3. Deploy backend (Node.js) on VM
-4. Create Application Gateway
-
-### Phase 2: Configuration
-1. Configure backend pools
-2. Set up HTTP settings
-3. Create routing rules
-4. Configure SSL/TLS
-5. Set up health probes
-
-### Phase 3: Testing
-1. Test routing rules
-2. Verify CORS configuration
-3. Test SSL/TLS
-4. Load testing
-
-### Phase 4: Go Live
-1. Update DNS to point to Application Gateway
-2. Monitor metrics
-3. Set up alerts
-4. Gradually move traffic
-
-## Monitoring Dashboard Example
-
-**Create Azure Dashboard with:**
-- Application Gateway health
-- Backend pool status
-- Request throughput
-- Error rates
-- Latency metrics
-- Active connections
-
-## Additional Resources
-
-- [Azure Application Gateway Documentation](https://docs.microsoft.com/en-us/azure/application-gateway/)
-- [URL-based Routing](https://docs.microsoft.com/en-us/azure/application-gateway/url-route-overview)
-- [WAF Configuration](https://docs.microsoft.com/en-us/azure/web-application-firewall/)
-- [Azure Pricing Calculator](https://azure.microsoft.com/en-us/pricing/calculator/)
-
-## Summary
-
-**Benefits of using Azure Application Gateway:**
-✅ URL-based routing for multiple backends
-✅ SSL/TLS termination
-✅ Load balancing across instances
-✅ WAF protection
-✅ Auto-scaling support
-✅ Health monitoring
-✅ Request rewrites
-✅ Multi-site hosting
-✅ Managed service (no infrastructure management)
-
-This setup provides a production-ready, scalable architecture for your KFC application!
+The Cart VirtualService uses `cart.arb-api.qa.bikkam.online`. The Istio
+Gateway must accept all three hosts. Application Gateway is the public entry
+point; it does not replace the Istio Gateway or VirtualServices.
+
+## Cutover and validation
+
+1. Inspect the AKS VNet/subnet and determine whether Istio is managed by the
+   AKS add-on or installed with `istioctl`. Reserve an available private IP
+   and confirm the Application Gateway subnet can route to it.
+2. Plan how to provision the private Istio LoadBalancer while preserving the
+   current public endpoint. If supported by the cluster setup, create a
+   separate internal gateway Service and validate it alongside the public
+   Service. Otherwise, schedule a controlled replacement with an explicit
+   outage and rollback plan; do not assume one Service can retain both public
+   and private frontend IPs.
+3. Configure and validate the Application Gateway backend pool, HTTP setting,
+   health probe, wildcard listener, and Basic rule against the private Istio
+   endpoint.
+4. Test each hostname against the Application Gateway public IP while
+   explicitly supplying the service Host header. Confirm each request reaches
+   the expected API route and preserves the hostname through Istio.
+5. Create/link Azure Private DNS and verify all three names resolve to Istio's
+   private IP from AKS and client VNets.
+6. Add the Cloudflare wildcard record pointing to the Application Gateway
+   public IP. Validate public DNS and the Pages Function flow.
+7. Switch public traffic only after these checks pass. Keep the existing
+   public route available for rollback until the cutover is stable.
+
+The sample listener uses HTTP port 80 to match the currently documented QA
+Istio configuration. HTTP is unencrypted and must not be used for real user
+credentials. For production, configure HTTPS listeners and certificates,
+HTTPS backend settings if Istio is configured for TLS, and the matching
+Cloudflare TLS mode before cutover.
+
+## References
+
+- [Azure Application Gateway documentation](https://learn.microsoft.com/en-us/azure/application-gateway/)
+- [Multi-site and wildcard listener behavior](https://learn.microsoft.com/en-us/azure/application-gateway/multiple-site-overview)
+- [Backend HTTP settings](https://learn.microsoft.com/en-us/azure/application-gateway/configuration-http-settings)
+- [Azure Private DNS overview](https://learn.microsoft.com/en-us/azure/dns/private-dns-overview)
+- [Azure Application Gateway WAF](https://learn.microsoft.com/en-us/azure/web-application-firewall/)

@@ -342,6 +342,11 @@ Istio ingress IP. Build and push the Gateway and Cart images with the
 repository's manual image-build workflow, then apply the Kubernetes manifests
 using the steps in [ROUTING_GUIDE.md](./ROUTING_GUIDE.md).
 
+These public Istio ingress instructions describe the current QA setup. The
+planned private-ingress and Application Gateway design is documented below;
+do not switch Istio to a private IP until the Application Gateway path is
+ready, or remote Cloudflare Pages requests will lose access to the APIs.
+
 #### Add the API DNS records
 
 In the Cloudflare dashboard:
@@ -395,6 +400,47 @@ through its same-origin Function path, such as
 `https://<YOUR_PAGES_DOMAIN>/api/users/auth/login`. A timeout or Cloudflare
 522 indicates that Cloudflare cannot reach the origin; verify the ingress IP,
 DNS proxy status, and Azure inbound TCP/80 access.
+
+### Planned target: private Istio ingress and Azure Private DNS
+
+> **Plan only:** this target has not been applied. The current QA setup above
+> still uses a publicly reachable Istio ingress IP.
+
+The target keeps the existing host-based API routing while moving Istio behind
+a private Azure Load Balancer. Cloudflare Pages remains outside the AKS VNet,
+so its public requests must reach the future Application Gateway; it cannot
+resolve or connect to Azure Private DNS or the Istio private IP directly.
+
+1. **Inspect the AKS/Istio installation before changing it.** Determine whether
+   the ingress gateway is managed by the AKS Istio add-on or installed with
+   `istioctl`. Record its Service configuration, AKS VNet/subnet, current
+   ingress IP, and any consumers. Select an available private IP from the
+   correct subnet if a stable address is required.
+2. **Make the Istio ingress gateway internal.** Configure the
+   `istio-ingressgateway` LoadBalancer Service with the AKS internal-load-
+   balancer annotation (and the selected private IP, if using a static one).
+   Verify that Azure assigns a private IP and that the existing Istio Gateway
+   and VirtualServices still route the `users`, `cart`, and `orders` hosts to
+   the Express API Gateway. This change can interrupt ingress; keep a rollback
+   plan and schedule a maintenance window.
+3. **Create split-horizon private DNS.** Create an Azure Private DNS zone named
+   `arb-api.qa.bikkam.online`, link it to the AKS VNet and any VNet where
+   private clients need resolution, and add `users`, `cart`, and `orders` A
+   records pointing to the Istio private IP. From linked VNets, each service
+   hostname will resolve directly to Istio while retaining its Host header.
+4. **Prepare the public Cloudflare-to-Application-Gateway path.** In the
+   existing `bikkam.online` Cloudflare zone, use one wildcard record named
+   `*.arb-api.qa` pointing to the Application Gateway's public IP or DNS name.
+   This covers the three existing service hostnames; do not point this public
+   record at the private Istio IP. Configure the Application Gateway to forward
+   to Istio and preserve the original service hostname for Istio host routing.
+   Complete this path before making the Istio ingress private.
+5. **Validate and update operational docs.** Test private DNS and each service
+   hostname from inside linked VNets, then test Cloudflare Pages through the
+   Application Gateway. After the cutover succeeds, replace the current public
+   Istio DNS instructions above with the final Application Gateway and TLS
+   settings. Keep the old public route available until rollback is no longer
+   needed.
 
 ---
 
