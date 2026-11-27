@@ -7,7 +7,7 @@ spec:
   hosts:
     - users.arb-api.qa.bikkam.online
   gateways:
-    - app-gateway
+    - istio-system/ib-wildcard
   http:
     - match:
         - uri:
