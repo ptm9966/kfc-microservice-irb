@@ -2,6 +2,14 @@ const express = require("express");
 const Product = require("./product.model");
 
 const productRouter = express.Router();
+const productStringLimits = { title: 300, categories: 128, serve: 128, type: 64 };
+
+function isValidProductString(field, value) {
+    const maxLength = productStringLimits[field];
+    return typeof value === "string" &&
+        value.trim().length > 0 &&
+        (!maxLength || value.length <= maxLength);
+}
 
 /**
  * @swagger
@@ -25,16 +33,15 @@ const productRouter = express.Router();
  */
 productRouter.get("/product", async (req, res) => {
     const { categories } = req.query;
-    try {
-        let query = {};
-        if (categories) {
-            query.categories = categories;
-        }
+    if (categories !== undefined && typeof categories !== "string") {
+        return res.status(400).send({ "error": "Category must be a string" });
+    }
 
-        const products = await Product.find(query);
+    try {
+        const products = await Product.list(categories);
         res.status(200).send(products);
     } catch (error) {
-        console.log(error);
+        console.error(error);
         res.status(500).send({ "error": "Something went wrong while fetching products" });
     }
 });
@@ -53,28 +60,28 @@ productRouter.get("/product", async (req, res) => {
  *         schema:
  *           type: string
  *         required: true
- *         description: Search query
+ *         description: Search query of up to 300 characters
  *     responses:
  *       200:
  *         description: Search results
  *       400:
- *         description: Missing search query
+ *         description: Missing or invalid search query
  *       500:
  *         description: Search error
  */
 productRouter.get("/product/search", async (req, res) => {
     const { q } = req.query;
-    if (!q) {
-        return res.status(400).send({ "error": "Search query parameter 'q' is required" });
+    if (typeof q !== "string" || !q.trim() || q.length > 300) {
+        return res.status(400).send({
+            "error": "Search query parameter 'q' is required and must be at most 300 characters",
+        });
     }
 
     try {
-        const products = await Product.find({
-            "title": { "$regex": q, "$options": "i" }
-        });
+        const products = await Product.searchByTitle(q);
         res.status(200).send(products);
     } catch (error) {
-        console.log(error);
+        console.error(error);
         res.status(500).send({ "error": "Something went wrong while searching products" });
     }
 });
@@ -111,7 +118,7 @@ productRouter.get("/product/:productId", async (req, res) => {
         }
         res.status(200).send(product);
     } catch (error) {
-        console.log(error);
+        console.error(error);
         res.status(500).send({ "error": "Something went wrong while fetching product" });
     }
 });
@@ -170,23 +177,26 @@ productRouter.get("/product/:productId", async (req, res) => {
  */
 productRouter.post("/product", async (req, res) => {
     const payload = req.body;
-    const { title } = req.body;
-
-    if (!title) {
-        return res.status(400).send({ "error": "Product title is required" });
+    const requiredStringFields = ["image", "title", "desc", "categories", "serve", "type"];
+    if (!payload || typeof payload !== "object" || Array.isArray(payload) ||
+        requiredStringFields.some((field) =>
+            !isValidProductString(field, payload[field])
+        ) ||
+        payload.price === undefined || payload.price === null || payload.price === "" ||
+        !Number.isFinite(Number(payload.price))) {
+        return res.status(400).send({ "error": "All product fields must be valid" });
     }
 
     try {
-        const existing = await Product.findOne({ title });
+        const existing = await Product.findByTitle(payload.title);
         if (existing) {
             return res.status(400).send({ "error": "Product with this title already exists" });
         }
 
-        const newProduct = new Product(payload);
-        await newProduct.save();
+        await Product.create({ ...payload, price: Number(payload.price) });
         res.status(201).send({ "message": "Product created successfully" });
     } catch (error) {
-        console.log(error);
+        console.error(error);
         res.status(500).send({ "error": "Something went wrong while creating product" });
     }
 });
@@ -218,15 +228,14 @@ productRouter.delete("/product/:productId", async (req, res) => {
     const { productId } = req.params;
 
     try {
-        const existing = await Product.findById(productId);
-        if (!existing) {
+        const deleted = await Product.deleteById(productId);
+        if (!deleted) {
             return res.status(404).send({ "error": "Product not found" });
         }
 
-        await Product.findByIdAndDelete(productId);
         res.status(200).send({ "message": "Product deleted successfully" });
     } catch (error) {
-        console.log(error);
+        console.error(error);
         res.status(500).send({ "error": "Something went wrong while deleting product" });
     }
 });
@@ -278,17 +287,34 @@ productRouter.delete("/product/:productId", async (req, res) => {
 productRouter.patch("/product/:productId", async (req, res) => {
     const { productId } = req.params;
     const payload = req.body;
+    const allowedFields = ["image", "title", "desc", "categories", "price", "serve", "type"];
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+        return res.status(400).send({ "error": "Product updates must be a JSON object" });
+    }
+
+    const updates = Object.fromEntries(
+        Object.entries(payload).filter(([field]) => allowedFields.includes(field))
+    );
+    if (Object.keys(updates).length === 0 ||
+        Object.entries(updates).some(([field, value]) => {
+            if (field === "price") {
+                return value === null || value === "" || !Number.isFinite(Number(value));
+            }
+            return !isValidProductString(field, value);
+        })) {
+        return res.status(400).send({ "error": "Product updates contain invalid fields" });
+    }
+    if (Object.hasOwn(updates, "price")) updates.price = Number(updates.price);
 
     try {
-        const existing = await Product.findById(productId);
-        if (!existing) {
+        const updated = await Product.updateById(productId, updates);
+        if (!updated) {
             return res.status(404).send({ "error": "Product not found" });
         }
 
-        await Product.findByIdAndUpdate(productId, payload);
         res.status(200).send({ "message": "Product updated successfully" });
     } catch (error) {
-        console.log(error);
+        console.error(error);
         res.status(500).send({ "error": "Something went wrong while updating product" });
     }
 });

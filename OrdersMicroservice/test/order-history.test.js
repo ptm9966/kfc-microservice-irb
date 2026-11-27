@@ -38,17 +38,22 @@ test("order history uses the verified user and rejects unverified tokens", async
   });
   process.env.USERS_SERVICE_URL = await startServer(t, usersApp);
 
-  let filter;
-  let detailFilter;
+  let listUserId;
+  let detailQuery;
+  let statusUpdate;
   let createdOrder;
   const OrderModel = {
-    find(query) {
-      filter = query;
-      return { sort: async () => [] };
+    async listByUserId(userId) {
+      listUserId = userId;
+      return [];
     },
-    async findOne(query) {
-      detailFilter = query;
+    async findByIdForUser(orderId, userId) {
+      detailQuery = { orderId, userId };
       return null;
+    },
+    async updateStatus(orderId, status) {
+      statusUpdate = { orderId, status };
+      return { _id: orderId, status };
     },
     async create(order) {
       createdOrder = order;
@@ -72,14 +77,22 @@ test("order history uses the verified user and rejects unverified tokens", async
     headers: { Authorization: "Bearer valid-password-token" },
   });
   assert.equal(response.status, 200);
-  assert.deepEqual(filter, { userId: "user-123" });
+  assert.equal(listUserId, "user-123");
   assert.deepEqual(await response.json(), []);
 
   const detailResponse = await fetch(`${baseUrl}/orders/order-456?userId=somebody-else`, {
     headers: { Authorization: "Bearer valid-password-token" },
   });
   assert.equal(detailResponse.status, 404);
-  assert.deepEqual(detailFilter, { _id: "order-456", userId: "user-123" });
+  assert.deepEqual(detailQuery, { orderId: "order-456", userId: "user-123" });
+
+  const statusResponse = await fetch(`${baseUrl}/orders/order-789/status`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ status: "Preparing" }),
+  });
+  assert.equal(statusResponse.status, 200);
+  assert.deepEqual(statusUpdate, { orderId: "order-789", status: "Preparing" });
 
   const createResponse = await fetch(`${baseUrl}/orders`, {
     method: "POST",

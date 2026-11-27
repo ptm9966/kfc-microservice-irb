@@ -7,7 +7,7 @@
     "node": ">=20.0.0"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "node --test",
     "start": "node index.js",
     "dev": "nodemon index.js"
   },
@@ -21,7 +21,7 @@
     "express-jwt": "^8.5.1",
     "jsonwebtoken": "^9.0.2",
     "jwks-rsa": "^4.1.0",
-    "mongoose": "^9.6.1",
+    "mssql": "^11.0.1",
     "nodemon": "^3.1.14",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1"

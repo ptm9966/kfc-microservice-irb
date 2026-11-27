@@ -6,10 +6,11 @@ const productsServiceUrl = process.env.PRODUCTS_SERVICE_URL || "http://localhost
 
 router.get("/", async (req, res) => {
   try {
-    const response = await axios.get(`${productsServiceUrl}/api/products`, {
+    const response = await axios.get(`${productsServiceUrl}/api/product`, {
       headers: {
         Authorization: req.headers.authorization,
       },
+      params: req.query,
     });
     res.json(response.data);
   } catch (error) {

@@ -16,10 +16,10 @@ if errorlevel 1 (
     exit /b 1
 )
 
-REM Check if Docker Compose is installed
-docker-compose --version >nul 2>&1
+REM Check if Docker Compose is available
+docker compose version >nul 2>&1
 if errorlevel 1 (
-    echo ❌ Docker Compose is not installed
+    echo ❌ Docker Compose is not available
     pause
     exit /b 1
 )
@@ -27,27 +27,15 @@ if errorlevel 1 (
 echo ✅ Docker is installed: 
 docker --version
 echo ✅ Docker Compose is installed:
-docker-compose --version
-echo.
-
-REM Verify .env file exists
-if not exist "cartMicroservice\.env" (
-    echo ⚠️  cartMicroservice\.env file not found
-    echo Creating .env file...
-    (
-        echo DB_URL=mongodb://admin:admin123456@mongodb:27017/kfc-database?authSource=admin
-        echo PORT=8080
-        echo FRONTEND_URL=http://localhost:3000
-    ) > cartMicroservice\.env
-)
+docker compose version
 
 echo.
 echo 🏗️  Building Docker images...
-docker-compose build --no-cache
+docker compose build --no-cache
 
 echo.
 echo 🚀 Starting services...
-docker-compose up -d
+docker compose up -d
 
 echo.
 echo ⏳ Waiting for services to be healthy...
@@ -55,7 +43,7 @@ timeout /t 10 /nobreak
 
 echo.
 echo 📊 Service Status:
-docker-compose ps
+docker compose ps
 
 echo.
 echo ✅ All services are running!
@@ -63,22 +51,18 @@ echo.
 echo ================================
 echo Access Points:
 echo ================================
-echo Frontend (React):     http://localhost:3000
 echo Cart API:             http://localhost:8080
-echo API Documentation:    http://localhost:8080/api-docs
-echo MongoDB:              localhost:27017
-echo.
-echo Credentials:
-echo MongoDB Username:     admin
-echo MongoDB Password:     admin123456
-echo MongoDB Database:     kfc-database
+echo Orders API:           http://localhost:8081
+echo Users API:            http://localhost:8082
+echo Products API:         http://localhost:8083
+echo API Gateway:          http://localhost:9000
+echo SQL Server:           localhost:14330
 echo.
 echo ================================
 echo Useful Commands:
 echo ================================
-echo View logs:            docker-compose logs -f
-echo View cart logs:       docker-compose logs -f cart-service
-echo Stop services:        docker-compose down
-echo Stop ^& remove data:  docker-compose down -v
+echo View logs:            docker compose logs -f
+echo View cart logs:       docker compose logs -f cart-service
+echo Stop services:        docker compose down
 echo.
 pause

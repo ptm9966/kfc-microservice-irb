@@ -5,7 +5,7 @@ const cors = require("cors");
 const swaggerUi = require("swagger-ui-express");
 const { expressjwt: jwt } = require("express-jwt");
 const jwksRsa = require("jwks-rsa");
-const connect = require("./config/db");
+const { connect } = require("./config/db");
 const swaggerSpecs = require("./config/swagger");
 const userRouter = require("./features/user/user.route");
 
@@ -73,7 +73,16 @@ app.use((err, req, res, next) => {
   next(err);
 });
 
-app.listen(PORT, async () => {
-    await connect();
-    console.log(`User Microservice listening at http://localhost:${PORT}`);
-});
+async function start() {
+    try {
+        await connect();
+        app.listen(PORT, () => {
+            console.log(`User Microservice listening at http://localhost:${PORT}`);
+        });
+    } catch (error) {
+        console.error("User Microservice startup failed:", error);
+        process.exit(1);
+    }
+}
+
+start();

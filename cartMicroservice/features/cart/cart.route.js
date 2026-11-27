@@ -9,7 +9,7 @@ const normalizeCartItem = (item = {}) => {
     title: values.title || values.name,
     image: values.image || values.img,
     desc: values.desc || values.description,
-    price: Number(values.price) || 0,
+    price: Number.isFinite(Number(values.price)) ? Number(values.price) : 0,
     qty: Number(values.qty) || 1,
   };
 };
@@ -37,7 +37,7 @@ function createCartRouter({ CartModel = Cart, authenticateUser = authenticateCar
    */
   cartRouter.get("/cart", async (req, res) => {
     try {
-      const cart = await CartModel.find({ userId: req.cartUserId }).sort({ createdAt: -1 });
+      const cart = await CartModel.listByUserId(req.cartUserId);
       res.set("Cache-Control", "private, no-store");
       return res.status(200).send(cart);
     } catch (error) {
@@ -73,19 +73,10 @@ function createCartRouter({ CartModel = Cart, authenticateUser = authenticateCar
         return res.status(400).send({ message: "A product ID and positive whole-number quantity are required" });
       }
 
-      const item = await CartModel.findOneAndUpdate(
-        { userId: req.cartUserId, productId: String(payload.productId) },
-        {
-          $set: {
-            title: payload.title,
-            image: payload.image,
-            desc: payload.desc,
-            price: payload.price,
-          },
-          $inc: { qty: payload.qty },
-        },
-        { new: true, upsert: true, setDefaultsOnInsert: true }
-      );
+      const item = await CartModel.addItem(req.cartUserId, {
+        ...payload,
+        productId: String(payload.productId),
+      });
       return res.status(200).send({ message: "Cart item added or quantity updated", item });
     } catch (error) {
       console.error("Unable to save cart item:", error);
@@ -116,15 +107,12 @@ function createCartRouter({ CartModel = Cart, authenticateUser = authenticateCar
   cartRouter.delete("/cart/:cartId", async (req, res) => {
     try {
       const cartId = extractCartId(req.params.cartId);
-      const deleted = await CartModel.findOneAndDelete({ _id: cartId, userId: req.cartUserId });
+      const deleted = await CartModel.deleteByIdForUser(cartId, req.cartUserId);
       if (!deleted) {
         return res.status(404).send({ message: "Cart item not found" });
       }
       return res.status(200).send({ message: "Cart item deleted successfully" });
     } catch (error) {
-      if (error.name === "CastError") {
-        return res.status(404).send({ message: "Cart item not found" });
-      }
       console.error("Unable to delete cart item:", error);
       return res.status(500).send({ err: "Something went wrong" });
     }
@@ -159,7 +147,7 @@ function createCartRouter({ CartModel = Cart, authenticateUser = authenticateCar
   cartRouter.patch("/cart/:cartId", async (req, res) => {
     try {
       const cartId = extractCartId(req.params.cartId);
-      const existing = await CartModel.findOne({ _id: cartId, userId: req.cartUserId });
+      const existing = await CartModel.findByIdForUser(cartId, req.cartUserId);
       if (!existing) {
         return res.status(404).send({ message: "Cart item not found" });
       }
@@ -174,7 +162,10 @@ function createCartRouter({ CartModel = Cart, authenticateUser = authenticateCar
       if (payload.title !== undefined || payload.name !== undefined) updates.title = payload.title || payload.name;
       if (payload.image !== undefined || payload.img !== undefined) updates.image = payload.image || payload.img;
       if (payload.desc !== undefined || payload.description !== undefined) updates.desc = payload.desc || payload.description;
-      if (payload.price !== undefined) updates.price = Number(payload.price) || 0;
+      if (payload.price !== undefined) {
+        const price = Number(payload.price);
+        updates.price = Number.isFinite(price) ? price : 0;
+      }
       if (payload.qty !== undefined) {
         const quantity = Number(payload.qty);
         if (!Number.isInteger(quantity) || quantity < 1) {
@@ -182,13 +173,12 @@ function createCartRouter({ CartModel = Cart, authenticateUser = authenticateCar
         }
         updates.qty = quantity;
       }
-      Object.assign(existing, updates);
-      const updated = await existing.save();
-      return res.status(200).send({ message: "Cart item updated successfully", item: updated });
-    } catch (error) {
-      if (error.name === "CastError") {
+      const updated = await CartModel.updateByIdForUser(cartId, req.cartUserId, updates);
+      if (!updated) {
         return res.status(404).send({ message: "Cart item not found" });
       }
+      return res.status(200).send({ message: "Cart item updated successfully", item: updated });
+    } catch (error) {
       console.error("Unable to update cart item:", error);
       return res.status(500).send({ err: "Something went wrong" });
     }
@@ -208,7 +198,7 @@ function createCartRouter({ CartModel = Cart, authenticateUser = authenticateCar
    */
   cartRouter.delete("/cart", async (req, res) => {
     try {
-      await CartModel.deleteMany({ userId: req.cartUserId });
+      await CartModel.clearByUserId(req.cartUserId);
       return res.status(200).send({ message: "Cart cleared successfully" });
     } catch (error) {
       console.error("Unable to clear cart:", error);

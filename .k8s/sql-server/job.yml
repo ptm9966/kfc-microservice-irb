@@ -1,0 +1,72 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kfc-sql-server-bootstrap
+  namespace: domain-service-v3
+spec:
+  backoffLimit: 12
+  ttlSecondsAfterFinished: 86400
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: bootstrap
+          image: mcr.microsoft.com/mssql/server:2022-latest
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/bash
+          args:
+            - -ec
+            - |
+              SQLCMD=/opt/mssql-tools18/bin/sqlcmd
+              attempts=0
+              until "$SQLCMD" -S kfc-sql-server -U sa -P "$MSSQL_SA_PASSWORD" -C -l 5 -Q "SELECT 1" >/dev/null 2>&1; do
+                attempts=$((attempts + 1))
+                if [ "$attempts" -ge 120 ]; then
+                  echo "SQL Server did not become ready in time" >&2
+                  exit 1
+                fi
+                echo "Waiting for SQL Server"
+                sleep 5
+              done
+              "$SQLCMD" -b -S kfc-sql-server -U sa -P "$MSSQL_SA_PASSWORD" -C \
+                -v USERS_SQL_PASSWORD="$USERS_SQL_PASSWORD" \
+                   ORDERS_SQL_PASSWORD="$ORDERS_SQL_PASSWORD" \
+                   CART_SQL_PASSWORD="$CART_SQL_PASSWORD" \
+                -i /bootstrap/bootstrap.sql
+          env:
+            - name: MSSQL_SA_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: kfc-sql-server-secrets
+                  key: MSSQL_SA_PASSWORD
+            - name: USERS_SQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: user-service-secrets
+                  key: SQL_PASSWORD
+            - name: ORDERS_SQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: orders-service-secrets
+                  key: SQL_PASSWORD
+            - name: CART_SQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: cart-service-secrets
+                  key: SQL_PASSWORD
+          volumeMounts:
+            - name: bootstrap
+              mountPath: /bootstrap
+              readOnly: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+      volumes:
+        - name: bootstrap
+          configMap:
+            name: kfc-sql-server-bootstrap

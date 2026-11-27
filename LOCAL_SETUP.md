@@ -2,14 +2,14 @@
 
 This guide covers local development and testing. For the current API Gateway and
 Cloudflare Pages flow, use the **Docker Compose and Cloudflare Pages Testing**
-section; the older manual service instructions below are retained for reference.
+section.
 
 ---
 
 ## Table of Contents
 
 1. [Prerequisites](#prerequisites)
-2. [MongoDB Local Setup](#mongodb-local-setup)
+2. [SQL Server Local Setup](#sql-server-local-setup)
 3. [Backend Services Setup](#backend-services-setup)
 4. [Frontend Setup](#frontend-setup)
 5. [Docker Compose and Cloudflare Pages Testing](#docker-compose-and-cloudflare-pages-testing)
@@ -26,8 +26,6 @@ Before starting, ensure you have the following installed on your system:
 ### Required Software:
 - **Node.js** (v20.0.0 or higher) - [Download](https://nodejs.org/)
 - **npm** (v10.0.0 or higher) - Comes with Node.js
-- **MongoDB Community Edition** (v7.0 or higher) - [Download](https://www.mongodb.com/try/download/community)
-- **MongoDB Compass** (optional but recommended) - [Download](https://www.mongodb.com/products/tools/compass)
 - **Docker Desktop** (for the current Docker Compose flow) - [Download](https://www.docker.com/products/docker-desktop/)
 - A Cloudflare account with the `bikkam.online` zone (for testing a deployed Pages site)
 
@@ -37,78 +35,38 @@ Open PowerShell and verify the installations:
 ```powershell
 node --version      # Should show v20.x.x or higher
 npm --version       # Should show 10.x.x or higher
-mongod --version    # Should show v7.0 or higher
 ```
 
 ---
 
-## MongoDB Local Setup
+## SQL Server Local Setup
 
-### Step 1: Start MongoDB Service
-
-MongoDB needs to be running before starting any backend service.
-
-#### On Windows (Recommended):
-
-1. **If MongoDB is installed as a Windows Service:**
-   ```powershell
-   # Start MongoDB service
-   net start MongoDB
-   
-   # Stop MongoDB service (when needed)
-   net stop MongoDB
-   ```
-
-2. **If running MongoDB manually:**
-   ```powershell
-   # Navigate to MongoDB installation bin directory and run
-   mongod
-   
-   # Default: C:\Program Files\MongoDB\Server\7.0\bin\mongod.exe
-   ```
-
-### Step 2: Create Databases
-
-Open a new PowerShell window and connect to MongoDB:
+Users, Orders, Cart, and Products share the local SQL Server container, but use
+separate databases (`users-database`, `orders-database`, `cart-database`, and
+`products-database`). From the repository root, copy `.env.example` to `.env`
+and set `USERS_SQL_SA_PASSWORD` to the password for the shared SQL Server. If
+reusing the existing `kfc_sql_data` volume, keep its current password; for a
+new local database, use a strong local-only password. Then start the SQL
+container and services:
 
 ```powershell
-mongosh
+Copy-Item .env.example .env
+docker compose up --build -d kfc-sql-server users-service orders-service cart-service products-service
 ```
 
-In the MongoDB shell, run these commands to create the required databases:
+Compose creates each database and its schema on startup. The services use
+production-style images without source or `node_modules` bind mounts; rebuild
+after code or dependency changes. Existing MongoDB carts, orders, and product
+catalog data are not migrated. The new products database starts empty.
 
-```javascript
-// Create main application database
-use kfc-database
-db.createCollection("products")
-db.createCollection("carts")
-db.createCollection("orders")
-db.createCollection("users")
-
-// Create orders microservice database
-use orders-database
-db.createCollection("orders")
-
-// Create users microservice database
-use users-database
-db.createCollection("users")
-
-// Create products microservice database
-use products-database
-db.createCollection("products")
-
-// Exit MongoDB shell
-exit
-```
-
-### Step 3: Verify MongoDB Connection
-
-```powershell
-mongosh
-db.adminCommand({ ping: 1 })
-# Should return { ok: 1 }
-exit
-```
+For running a service directly on the host, use `SQL_SERVER=localhost`,
+`SQL_PORT=14330`, `SQL_USER=sa`, and the same password from the root `.env`.
+Set `SQL_CREATE_DATABASE=true` and `SQL_AUTO_CREATE_SCHEMA=true` for local
+development. Microsoft SQL Server Linux containers are supported on x86-64,
+not ARM64 Macs; on ARM64, use an x86-64 host or a separate non-production Azure
+SQL database. Do not remove the `kfc_sql_data` volume when restarting Compose;
+the Product database is created empty and existing MongoDB catalog data is not
+imported.
 
 ---
 
@@ -117,18 +75,18 @@ exit
 The application consists of 4 backend services + 1 frontend. Each needs to be set up independently.
 
 ### Service Ports:
-- **Backend (Main)**: Port 8080
+- **Cart Microservice**: Port 8080
 - **Orders Microservice**: Port 8081
 - **Users Microservice**: Port 8082
 - **Products Microservice**: Port 8083
 - **Frontend**: Port 3000
 
-### For Each Service (Backend, OrdersMicroservice, ProductMicroservice, UserMicroservice):
+### For Each Service (cartMicroservice, OrdersMicroservice, ProductMicroservice, UserMicroservice):
 
 #### Step 1: Navigate to Service Directory
 
 ```powershell
-cd d:\PTM\PTMProjects\fullstack_application\dramatic-road-5348\Backend
+cd d:\PTM\PTMProjects\fullstack_application\dramatic-road-5348\cartMicroservice
 # or
 cd d:\PTM\PTMProjects\fullstack_application\dramatic-road-5348\OrdersMicroservice
 # or
@@ -147,35 +105,131 @@ npm install
 
 In each service directory, create a `.env` file with the appropriate configuration:
 
-**Backend/.env**
+**cartMicroservice/.env**
 ```env
 NODE_ENV=development
 PORT=8080
-DB_URL=mongodb://localhost:27017/kfc-database
-FRONTEND_URL=http://localhost:3000
+SQL_SERVER=localhost
+SQL_PORT=14330
+SQL_DATABASE=cart-database
+SQL_USER=sa
+SQL_PASSWORD=REPLACE_WITH_THE_ROOT_ENV_SQL_PASSWORD
+SQL_ENCRYPT=false
+SQL_TRUST_SERVER_CERTIFICATE=true
+SQL_CREATE_DATABASE=true
+SQL_AUTO_CREATE_SCHEMA=true
+USERS_SERVICE_URL=http://localhost:8082
 ```
 
 **OrdersMicroservice/.env**
 ```env
 NODE_ENV=development
 PORT=8081
-DB_URL=mongodb://localhost:27017/orders-database
+SQL_SERVER=localhost
+SQL_PORT=14330
+SQL_DATABASE=orders-database
+SQL_USER=sa
+SQL_PASSWORD=REPLACE_WITH_THE_ROOT_ENV_SQL_PASSWORD
+SQL_ENCRYPT=false
+SQL_TRUST_SERVER_CERTIFICATE=true
+SQL_CREATE_DATABASE=true
+SQL_AUTO_CREATE_SCHEMA=true
+USERS_SERVICE_URL=http://localhost:8082
 ```
 
 **ProductMicroservice/.env**
 ```env
 NODE_ENV=development
 PORT=8083
-DB_URL=mongodb://localhost:27017/products-database
+SQL_SERVER=localhost
+SQL_PORT=14330
+SQL_DATABASE=products-database
+SQL_USER=sa
+SQL_PASSWORD=REPLACE_WITH_THE_ROOT_ENV_SQL_PASSWORD
+SQL_ENCRYPT=false
+SQL_TRUST_SERVER_CERTIFICATE=true
+SQL_CREATE_DATABASE=true
+SQL_AUTO_CREATE_SCHEMA=true
 ```
 
 **UserMicroservice/.env**
 ```env
 NODE_ENV=development
 PORT=8082
-DB_URL=mongodb://localhost:27017/users-database
+SQL_SERVER=localhost
+SQL_PORT=14330
+SQL_DATABASE=users-database
+SQL_USER=sa
+SQL_PASSWORD=REPLACE_WITH_A_STRONG_LOCAL_PASSWORD
+SQL_ENCRYPT=false
+SQL_TRUST_SERVER_CERTIFICATE=true
+SQL_CREATE_DATABASE=true
+SQL_AUTO_CREATE_SCHEMA=true
 JWT_SECRET=your-super-secret-jwt-key-change-this-in-development
 ```
+
+All active microservices use SQL Server.
+For local Docker Compose, copy the root
+`.env.example` to `.env`, replace the placeholder with a strong local-only
+password, then run `docker compose up --build -d kfc-sql-server users-service orders-service cart-service products-service`
+from the repository root. If starting any SQL-backed service directly, set
+`SQL_PASSWORD` in its `.env` to the same local SQL password.
+Compose creates a local development database and schema. For AKS, replace the
+placeholders in the SQL Server and service Secret manifests, apply
+service Secrets first, then apply the SQL Server resources in dependency order
+and wait for the bootstrap Job before applying the service Deployments:
+
+When upgrading a cluster that already has the SQL Server StatefulSet, stop and
+remove it before creating the Deployment. Its PVC is retained and reused by the
+Deployment:
+
+```powershell
+kubectl scale statefulset/kfc-sql-server --replicas=0 -n domain-service-v3
+kubectl delete statefulset/kfc-sql-server -n domain-service-v3
+kubectl delete service/kfc-sql-server-headless -n domain-service-v3 --ignore-not-found
+```
+
+```powershell
+kubectl apply -f .k8s/order-service/namespace.yml
+kubectl apply -f .k8s/user-service/secret.yml
+kubectl apply -f .k8s/order-service/secret.yml
+kubectl apply -f .k8s/cart-service/secret.yml
+kubectl apply -f .k8s/sql-server/secret.yml
+kubectl apply -f .k8s/sql-server/service.yml
+kubectl apply -f .k8s/sql-server/storageclass.yml
+# For a fresh install only; skip if this PVC already exists and is Bound.
+kubectl apply -f .k8s/sql-server/persistent-volume-claim.yml
+kubectl apply -f .k8s/sql-server/deployment.yml
+kubectl apply -f .k8s/sql-server/configmap.yml
+kubectl apply -f .k8s/sql-server/job.yml
+kubectl wait --for=condition=complete job/kfc-sql-server-bootstrap -n domain-service-v3 --timeout=15m
+```
+
+Use distinct strong URL-safe passwords in the service Secrets. The manifest
+creates four databases and dedicated logins for User, Orders, and Cart; those
+services create their schemas on startup. The products database starts empty;
+there is currently no Product AKS Deployment in this repository. SQL Server
+Developer edition is for development/testing, not production. Existing
+MongoDB users, orders, cart items, and product data are not migrated.
+
+The SQL Server StorageClass uses the AKS Azure Disk CSI driver. Its `Retain`
+reclaim policy keeps the disk if the claim is deleted. A PVC's StorageClass
+cannot be changed after it is bound: when upgrading an existing SQL Server
+installation, keep and reuse its existing PVC instead of applying the updated
+PVC manifest. The StorageClass applies to newly provisioned claims.
+
+Both services run from built images without source or dependency bind mounts.
+Rebuild after changing code or dependencies:
+
+```bash
+docker compose up --build --force-recreate -d users-service orders-service cart-service products-service
+docker compose logs -f users-service orders-service cart-service products-service
+```
+
+Microsoft SQL Server Linux containers are supported on x86-64, not ARM64
+Macs. On an ARM64 development machine, use a separate non-production Azure
+SQL database when running these services locally, or use an x86-64 host for
+the local Compose database. Never use the production database for local tests.
 
 ---
 
@@ -507,7 +561,6 @@ When all services are running successfully:
 ✓ Product Microservice listening at http://localhost:8083
 ✓ User Microservice listening at http://localhost:8082
 ✓ Frontend running at http://localhost:3000
-✓ MongoDB connected
 ```
 
 ---
@@ -528,11 +581,6 @@ Once services are running, access the Swagger documentation:
 ### To Stop:
 
 1. Press `Ctrl + C` in each terminal window to stop the service
-2. MongoDB service can be stopped with:
-   ```powershell
-   net stop MongoDB
-   ```
-
 ---
 
 ## Troubleshooting
@@ -553,20 +601,15 @@ Stop-Process -Id <PID> -Force
 PORT=8085
 ```
 
-### Issue: "MongoDB connection failed"
+### Issue: SQL Server connection failed
 
-**Problem**: "Connection Error: connect ECONNREFUSED 127.0.0.1:27017"
+**Problem**: The service cannot connect to the configured SQL Server.
 
 **Solution**:
 ```powershell
-# Start MongoDB service
-net start MongoDB
-
-# Or start MongoDB manually
-mongod
-
-# Verify MongoDB is running
-mongosh
+# Check that the SQL Server container is running and healthy
+docker compose ps kfc-sql-server
+docker compose logs kfc-sql-server
 ```
 
 ### Issue: "Cannot find module"
@@ -585,9 +628,9 @@ npm install
 **Problem**: Database connection or API call issue
 
 **Solution**:
-1. Ensure MongoDB is running
-2. Verify .env file is correctly placed in each service directory
-3. Check database names match between .env and MongoDB setup
+1. Verify the service's SQL Server environment variables
+2. Confirm the configured database name is correct
+3. Check that the SQL Server container is healthy
 
 ### Issue: Frontend cannot connect to Backend
 
@@ -623,10 +666,6 @@ Create a `start-local.bat` file in the root directory for easier startup:
 
 ```batch
 @echo off
-REM Start MongoDB
-echo Starting MongoDB...
-net start MongoDB
-
 REM Start each service in a new window
 echo Starting Backend...
 start cmd /k "cd Backend && npm start"
@@ -676,12 +715,10 @@ curl http://localhost:8083/api-docs
 curl http://localhost:3000
 ```
 
-### View MongoDB Data:
+### View SQL Server Data:
 
-Using MongoDB Compass:
-1. Open MongoDB Compass
-2. Connect to `mongodb://localhost:27017`
-3. Browse databases: `kfc-database`, `orders-database`, `users-database`, `products-database`
+Connect using SQL Server Management Studio or Azure Data Studio to
+`localhost,14330`, then select the database for the service you are inspecting.
 
 ### Debug with Node Inspector:
 
@@ -698,7 +735,6 @@ node --inspect index.js
 
 For issues or more information, refer to:
 - [Node.js Documentation](https://nodejs.org/docs/)
-- [MongoDB Documentation](https://docs.mongodb.com/)
 - [Express.js Documentation](https://expressjs.com/)
 - [React Documentation](https://react.dev/)
 

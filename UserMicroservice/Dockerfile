@@ -4,8 +4,6 @@ WORKDIR /app
 
 # Environment variables
 ENV NODE_ENV=production
-ENV DB_URL=$DB_URL
-ENV JWT_SECRET=$JWT_SECRET
 
 # Install dependencies
 COPY package*.json ./

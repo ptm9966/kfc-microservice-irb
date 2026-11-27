@@ -1,50 +1,4 @@
 services:
-  # MongoDB Database for main application
-  mongodb:
-    image: mongo:7.0
-    container_name: kfc-mongodb
-    restart: always
-    ports:
-      - "27018:27017"
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: admin
-      MONGO_INITDB_ROOT_PASSWORD: admin123456
-      MONGO_INITDB_DATABASE: kfc-database
-    volumes:
-      - mongodb_data:/data/db
-      - mongodb_config:/data/configdb
-    networks:
-      - kfc-network
-    healthcheck:
-      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand({ ping: 1 })"]
-      interval: 10s
-      timeout: 15s
-      retries: 10
-      start_period: 30s
-
-  # MongoDB Database for orders microservice
-  orders-mongodb:
-    image: mongo:7.0
-    container_name: orders-mongodb
-    restart: always
-    ports:
-      - "27019:27017"
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: admin
-      MONGO_INITDB_ROOT_PASSWORD: admin123456
-      MONGO_INITDB_DATABASE: orders-database
-    volumes:
-      - orders_mongodb_data:/data/db
-      - orders_mongodb_config:/data/configdb
-    networks:
-      - kfc-network
-    healthcheck:
-      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand({ ping: 1 })"]
-      interval: 10s
-      timeout: 15s
-      retries: 10
-      start_period: 30s
-
   # Cart Microservice
   cart-service:
     build:
@@ -57,19 +11,24 @@ services:
     environment:
       NODE_ENV: production
       PORT: 8080
-      DB_URL: mongodb://admin:admin123456@mongodb:27017/kfc-database?authSource=admin
+      SQL_SERVER: kfc-sql-server
+      SQL_PORT: 1433
+      SQL_DATABASE: cart-database
+      SQL_USER: sa
+      SQL_PASSWORD: "Ptm@19941225"
+      SQL_ENCRYPT: "false"
+      SQL_TRUST_SERVER_CERTIFICATE: "true"
+      SQL_CREATE_DATABASE: "true"
+      SQL_AUTO_CREATE_SCHEMA: "true"
       USERS_SERVICE_URL: http://users-service:8082
       FRONTEND_URL: http://localhost:3000
     depends_on:
-      mongodb:
+      kfc-sql-server:
         condition: service_healthy
       users-service:
         condition: service_started
     networks:
       - kfc-network
-    volumes:
-      - ./cartMicroservice:/app
-      - /app/node_modules
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost:8080/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
       interval: 30s
@@ -90,15 +49,20 @@ services:
       NODE_ENV: production
       PORT: 8081
       USERS_SERVICE_URL: http://users-service:8082
-      DB_URL: mongodb://admin:admin123456@orders-mongodb:27017/orders-database?authSource=admin
+      SQL_SERVER: kfc-sql-server
+      SQL_PORT: 1433
+      SQL_DATABASE: orders-database
+      SQL_USER: sa
+      SQL_PASSWORD: "Ptm@19941225"
+      SQL_ENCRYPT: "false"
+      SQL_TRUST_SERVER_CERTIFICATE: "true"
+      SQL_CREATE_DATABASE: "true"
+      SQL_AUTO_CREATE_SCHEMA: "true"
     depends_on:
-      orders-mongodb:
+      kfc-sql-server:
         condition: service_healthy
     networks:
       - kfc-network
-    volumes:
-      - ./OrdersMicroservice:/app
-      - /app/node_modules
     healthcheck:
       test: curl -f http://localhost:8081/health || exit 1
       interval: 30s
@@ -106,26 +70,25 @@ services:
       retries: 3
       start_period: 40s
 
-  # MongoDB Database for users microservice
-  users-mongodb:
-    image: mongo:7.0
-    container_name: users-mongodb
+  # Shared SQL Server database for local development
+  kfc-sql-server:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: kfc-sql-server
     restart: always
     ports:
-      - "27020:27017"
+      - "127.0.0.1:14330:1433"
     environment:
-      MONGO_INITDB_ROOT_USERNAME: admin
-      MONGO_INITDB_ROOT_PASSWORD: admin123456
-      MONGO_INITDB_DATABASE: users-database
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: Developer
+      MSSQL_SA_PASSWORD: "Ptm@19941225"
     volumes:
-      - users_mongodb_data:/data/db
-      - users_mongodb_config:/data/configdb
+      - kfc_sql_data:/var/opt/mssql
     networks:
       - kfc-network
     healthcheck:
-      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand({ ping: 1 })"]
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$${MSSQL_SA_PASSWORD}\" -C -Q \"SELECT 1\" || exit 1"]
       interval: 10s
-      timeout: 15s
+      timeout: 5s
       retries: 10
       start_period: 30s
 
@@ -141,7 +104,15 @@ services:
     environment:
       NODE_ENV: production
       PORT: 8082
-      DB_URL: mongodb://admin:admin123456@users-mongodb:27017/users-database?authSource=admin
+      SQL_SERVER: kfc-sql-server
+      SQL_PORT: 1433
+      SQL_DATABASE: users-database
+      SQL_USER: sa
+      SQL_PASSWORD: "Ptm@19941225"
+      SQL_ENCRYPT: "false"
+      SQL_TRUST_SERVER_CERTIFICATE: "true"
+      SQL_CREATE_DATABASE: "true"
+      SQL_AUTO_CREATE_SCHEMA: "true"
       JWT_SECRET: your-super-secret-jwt-key-change-this-in-production
       AUTH0_ISSUER: https://dev-6l85tc0ex15xt2oe.us.auth0.com/
       AUTH0_AUDIENCE: http://localhost:8082
@@ -149,43 +120,16 @@ services:
       AUTH0_MGMT_CLIENT_ID: ${AUTH0_MGMT_CLIENT_ID}
       AUTH0_MGMT_CLIENT_SECRET: ${AUTH0_MGMT_CLIENT_SECRET}
     depends_on:
-      users-mongodb:
+      kfc-sql-server:
         condition: service_healthy
     networks:
       - kfc-network
-    volumes:
-      - ./UserMicroservice:/app
-      - /app/node_modules
     healthcheck:
       test: curl -f http://localhost:8082/api-docs || exit 1
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
-
-  # MongoDB Database for products microservice
-  products-mongodb:
-    image: mongo:7.0
-    container_name: products-mongodb
-    restart: always
-    ports:
-      - "27021:27017"
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: admin
-      MONGO_INITDB_ROOT_PASSWORD: admin123456
-      MONGO_INITDB_DATABASE: products-database
-    volumes:
-      - products_mongodb_data:/data/db
-      - products_mongodb_config:/data/configdb
-      - ./init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js:ro
-    networks:
-      - kfc-network
-    healthcheck:
-      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand({ ping: 1 })"]
-      interval: 10s
-      timeout: 15s
-      retries: 10
-      start_period: 30s
 
   # Product Microservice
   products-service:
@@ -199,17 +143,22 @@ services:
     environment:
       NODE_ENV: production
       PORT: 8083
-      DB_URL: mongodb://admin:admin123456@products-mongodb:27017/products-database?authSource=admin
+      SQL_SERVER: kfc-sql-server
+      SQL_PORT: 1433
+      SQL_DATABASE: products-database
+      SQL_USER: sa
+      SQL_PASSWORD: "Ptm@19941225"
+      SQL_ENCRYPT: "false"
+      SQL_TRUST_SERVER_CERTIFICATE: "true"
+      SQL_CREATE_DATABASE: "true"
+      SQL_AUTO_CREATE_SCHEMA: "true"
     depends_on:
-      products-mongodb:
+      kfc-sql-server:
         condition: service_healthy
     networks:
       - kfc-network
-    volumes:
-      - ./ProductMicroservice:/app
-      - /app/node_modules
     healthcheck:
-      test: curl -f http://localhost:8083/api-docs || exit 1
+      test: ["CMD", "node", "-e", "fetch('http://localhost:8083/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -243,23 +192,8 @@ services:
  
 
 volumes:
-  mongodb_data:
+  kfc_sql_data:
     driver: local
-  mongodb_config:
-    driver: local
-  orders_mongodb_data:
-    driver: local
-  orders_mongodb_config:
-    driver: local
-  users_mongodb_data:
-    driver: local
-  users_mongodb_config:
-    driver: local
-  products_mongodb_data:
-    driver: local
-  products_mongodb_config:
-    driver: local
-
 networks:
   kfc-network:
     driver: bridge

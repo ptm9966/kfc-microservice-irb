@@ -18,7 +18,7 @@ spec:
       containers:
         - name: orders-service
           image: ghcr.io/ptm9966/kfc-ordersmicroservice-irb:latest
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           ports:
             - name: http
               containerPort: 8081
@@ -28,23 +28,30 @@ spec:
               value: production
             - name: PORT
               value: "8081"
-            - name: MONGO_USERNAME
+            - name: SQL_SERVER
+              value: kfc-sql-server.domain-service-v3.svc.cluster.local
+            - name: SQL_PORT
+              value: "1433"
+            - name: SQL_DATABASE
+              value: orders-database
+            - name: SQL_CREATE_DATABASE
+              value: "false"
+            - name: SQL_ENCRYPT
+              value: "true"
+            - name: SQL_TRUST_SERVER_CERTIFICATE
+              value: "true"
+            - name: SQL_AUTO_CREATE_SCHEMA
+              value: "true"
+            - name: SQL_USER
               valueFrom:
                 secretKeyRef:
-                  name: kfc-secrets
-                  key: MONGO_INITDB_ROOT_USERNAME
-            - name: MONGO_PASSWORD
+                  name: orders-service-secrets
+                  key: SQL_USER
+            - name: SQL_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: kfc-secrets
-                  key: MONGO_INITDB_ROOT_PASSWORD
-            - name: MONGO_DATABASE
-              valueFrom:
-                secretKeyRef:
-                  name: kfc-secrets
-                  key: MONGO_INITDB_DATABASE
-            - name: DB_URL
-              value: mongodb://$(MONGO_USERNAME):$(MONGO_PASSWORD)@kfc-mongodb.domain-service-v3.svc.cluster.local:27017/$(MONGO_DATABASE)?authSource=admin
+                  name: orders-service-secrets
+                  key: SQL_PASSWORD
             - name: USERS_SERVICE_URL
               value: http://users-service.domain-service-v3.svc.cluster.local:8082
           readinessProbe:

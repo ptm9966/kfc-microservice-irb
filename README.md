@@ -29,7 +29,7 @@ ___
 * Redux JS
 * Node JS
 * Express JS
-* MongoDB
+* Microsoft SQL Server
 * React Icons
 * Docker
 * Docker Compose
@@ -39,23 +39,23 @@ ___
 
 This application follows a microservices architecture:
 
-- **Main Backend Service** (Port 8080): Handles user authentication, products, and cart management
+- **Cart Microservice** (Port 8080): Manages authenticated user carts
 - **Orders Microservice** (Port 8081): Handles order creation, retrieval, and status updates
-- **Frontend** (Port 3000): React application that communicates with both services
-- **Databases**: Separate MongoDB instances for main data and orders
+- **Users Microservice** (Port 8082): Manages authentication and users
+- **Products Microservice** (Port 8083): Manages the product catalog
+- **API Gateway** (Port 9000): Routes API requests to the microservices
+- **Frontend** (Port 3000): React application that communicates with the services
+- **Databases**: SQL Server, with a separate database for each microservice
 
 ### Services
 
-1. **Main Backend** (`/Backend`):
-   - User authentication and management
-   - Product catalog
-   - Shopping cart functionality
-   - Database: `kfc-database`
+1. **Cart Microservice** (`/cartMicroservice`):
+   - SQL Server database: `cart-database`
 
 2. **Orders Microservice** (`/OrdersMicroservice`):
    - Order creation and management
    - Order status updates
-   - Database: `orders-database`
+   - SQL Server database: `orders-database`
 
 3. **Frontend** (`/Frontend`):
    - React application with Redux for state management
@@ -68,21 +68,26 @@ For routing options between the frontend and microservices, see [ROUTING_GUIDE.m
 #### Using Docker Compose (Recommended)
 
 ```bash
-docker-compose up --build
+docker compose up --build
 ```
 
-This will start all services:
-- MongoDB (ports 27018, 27019)
-- Main Backend (port 8080)
+This starts the API and database services:
+- Shared local SQL Server for Users, Orders, Cart, and Products (port 14330)
+- Cart Microservice (port 8080)
 - Orders Microservice (port 8081)
-- Frontend (port 3000)
+- Users Microservice (port 8082)
+- Products Microservice (port 8083)
+- API Gateway (port 9000)
+
+Start the Frontend separately from `/Frontend`.
 
 #### Manual Setup
 
-1. Start MongoDB instances
-2. Start Main Backend: `cd Backend && npm install && npm start`
+1. Start SQL Server using the setup in [LOCAL_SETUP.md](LOCAL_SETUP.md)
+2. Start Cart Microservice: `cd cartMicroservice && npm install && npm start`
 3. Start Orders Microservice: `cd OrdersMicroservice && npm install && npm start`
-4. Start Frontend: `cd Frontend && npm install && npm start`
+4. Start Users and Products Microservices from their respective directories
+5. Start Frontend: `cd Frontend && npm install && npm start`
 
 ### Credits
 ___

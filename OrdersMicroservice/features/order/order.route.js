@@ -39,7 +39,7 @@ function createOrderRouter(OrderModel = Order) {
    */
   orderRouter.get("/orders", authenticateOrderUser, async (req, res) => {
     try {
-      const orders = await OrderModel.find({ userId: req.orderUserId }).sort({ createdAt: -1 });
+      const orders = await OrderModel.listByUserId(req.orderUserId);
       res.set("Cache-Control", "private, no-store");
       return res.status(200).send(orders);
     } catch (error) {
@@ -62,7 +62,7 @@ function createOrderRouter(OrderModel = Order) {
    *         required: true
    *         schema:
    *           type: string
-   *         description: MongoDB order ID
+   *         description: SQL Server order UUID
    *     responses:
    *       200:
    *         description: Order details
@@ -79,10 +79,7 @@ function createOrderRouter(OrderModel = Order) {
    */
   orderRouter.get("/orders/:orderId", authenticateOrderUser, async (req, res) => {
     try {
-      const order = await OrderModel.findOne({
-        _id: req.params.orderId,
-        userId: req.orderUserId,
-      });
+      const order = await OrderModel.findByIdForUser(req.params.orderId, req.orderUserId);
       if (!order) {
         return res.status(404).send({ message: "Order not found" });
       }
@@ -106,7 +103,7 @@ function createOrderRouter(OrderModel = Order) {
    *         required: true
    *         schema:
    *           type: string
-   *         description: MongoDB order ID
+   *         description: SQL Server order UUID
    *     requestBody:
    *       required: true
    *       content:
@@ -134,11 +131,7 @@ function createOrderRouter(OrderModel = Order) {
         return res.status(400).send({ message: "Status is required" });
       }
 
-      const order = await OrderModel.findByIdAndUpdate(
-        req.params.orderId,
-        { status },
-        { new: true }
-      );
+      const order = await OrderModel.updateStatus(req.params.orderId, status);
 
       if (!order) {
         return res.status(404).send({ message: "Order not found" });

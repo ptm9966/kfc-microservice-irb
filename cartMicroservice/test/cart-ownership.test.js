@@ -7,54 +7,51 @@ const cartRouter = require("../features/cart/cart.route");
 const records = [];
 let nextId = 0;
 
-function matches(record, query) {
-  return Object.entries(query).every(([key, value]) => String(record[key]) === String(value));
-}
-
 class FakeCart {
   constructor(data) {
     Object.assign(this, data);
-    this._id = `cart-${++nextId}`;
+    this._id = `00000000-0000-4000-8000-${String(++nextId).padStart(12, "0")}`;
   }
 
-  async save() {
-    const index = records.findIndex((record) => record._id === this._id);
-    if (index === -1) records.push(this);
-    else records[index] = this;
-    return this;
+  static async listByUserId(userId) {
+    return records.filter((record) => record.userId === userId);
   }
 
-  static find(query) {
-    return {
-      sort: async () => records.filter((record) => matches(record, query)),
-    };
-  }
-
-  static async findOne(query) {
-    return records.find((record) => matches(record, query)) || null;
-  }
-
-  static async findOneAndUpdate(query, update) {
-    let record = records.find((item) => matches(item, query));
+  static async addItem(userId, incoming) {
+    let record = records.find((item) =>
+      item.userId === userId && item.productId === incoming.productId
+    );
     if (!record) {
-      record = new FakeCart(query);
+      record = new FakeCart({ ...incoming, userId });
       records.push(record);
+      return record;
     }
 
-    Object.assign(record, update.$set);
-    record.qty = Number(record.qty || 0) + update.$inc.qty;
+    Object.assign(record, incoming, { userId, qty: record.qty + incoming.qty });
     return record;
   }
 
-  static async findOneAndDelete(query) {
-    const index = records.findIndex((record) => matches(record, query));
-    if (index === -1) return null;
-    return records.splice(index, 1)[0];
+  static async findByIdForUser(cartId, userId) {
+    return records.find((record) => record._id === cartId && record.userId === userId) || null;
   }
 
-  static async deleteMany(query) {
+  static async updateByIdForUser(cartId, userId, updates) {
+    const record = await this.findByIdForUser(cartId, userId);
+    if (!record) return null;
+    Object.assign(record, updates);
+    return record;
+  }
+
+  static async deleteByIdForUser(cartId, userId) {
+    const index = records.findIndex((record) => record._id === cartId && record.userId === userId);
+    if (index === -1) return false;
+    records.splice(index, 1);
+    return true;
+  }
+
+  static async clearByUserId(userId) {
     for (let index = records.length - 1; index >= 0; index -= 1) {
-      if (matches(records[index], query)) records.splice(index, 1);
+      if (records[index].userId === userId) records.splice(index, 1);
     }
   }
 }
@@ -105,6 +102,20 @@ test("cart items are private to each authenticated user", async (t) => {
   assert.notEqual(aliceItem._id, bobItem._id);
   assert.equal(aliceItem.userId, "alice");
   assert.equal(bobItem.userId, "bob");
+
+  const crossUserUpdate = await fetch(`${origin}/api/cart/${encodeURIComponent(aliceItem._id)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", "x-test-user": "bob" },
+    body: JSON.stringify({ qty: 9 }),
+  });
+  assert.equal(crossUserUpdate.status, 404);
+
+  const updatedAliceItem = await fetch(`${origin}/api/cart/${encodeURIComponent(aliceItem._id)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", "x-test-user": "alice" },
+    body: JSON.stringify({ qty: 3 }),
+  }).then((res) => res.json());
+  assert.equal(updatedAliceItem.item.qty, 3);
 
   const aliceItems = await fetch(`${origin}/api/cart`, { headers: { "x-test-user": "alice" } }).then((res) => res.json());
   const bobItems = await fetch(`${origin}/api/cart`, { headers: { "x-test-user": "bob" } }).then((res) => res.json());

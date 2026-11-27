@@ -5,6 +5,9 @@ const Users = require("./user.model");
 
 const userRouter = express.Router();
 
+const isUniqueConstraintViolation = (error) =>
+    [2601, 2627].includes(error.number || error.originalError?.info?.number);
+
 async function getAuth0ManagementToken() {
     const domain = process.env.AUTH0_DOMAIN;
     const clientId = process.env.AUTH0_MGMT_CLIENT_ID;
@@ -150,7 +153,7 @@ userRouter.post("/login", async (req, res) => {
     }
 
     try {
-        let user = await Users.findOne({ mobile });
+        const user = await Users.findByMobile(mobile);
 
         if (!user || !isPasswordValid(password, user)) {
             return res.status(401).send({ message: "Invalid mobile number or password" });
@@ -215,13 +218,13 @@ userRouter.post("/signup", async (req, res) => {
     }
 
     try {
-        let existingUser = await Users.findOne({ $or: [{ email }, { mobile }] });
+        const existingUser = await Users.findDuplicate(email, mobile);
         if (existingUser) {
             return res.status(400).send({ message: "Cannot create user with existing email or mobile" });
         }
 
         const { passwordHash, salt: passwordSalt } = hashPassword(password);
-        let user = await Users.create({
+        const user = await Users.create({
             name, email, mobile, passwordHash, passwordSalt
         });
 
@@ -239,7 +242,7 @@ userRouter.post("/signup", async (req, res) => {
             message: "Signup successful"
         });
     } catch (e) {
-        if (e.code === 11000) {
+        if (isUniqueConstraintViolation(e)) {
             return res.status(400).send({ message: "Email or mobile already exists" });
         }
         res.status(500).send({ message: "Signup failed", error: e.message });
@@ -263,16 +266,20 @@ userRouter.post("/signup", async (req, res) => {
  *         description: Unauthorized
  */
 userRouter.get("/profile", async (req, res) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return res.status(401).send({ message: "Authorization token required" });
+    }
+
+    let decoded;
     try {
-        const authHeader = req.headers.authorization;
-        if (!authHeader || !authHeader.startsWith('Bearer ')) {
-            return res.status(401).send({ message: "Authorization token required" });
-        }
+        decoded = jwt.verify(authHeader.substring(7), process.env.JWT_SECRET || "default-secret");
+    } catch (error) {
+        return res.status(401).send({ message: "Invalid token", error: error.message });
+    }
 
-        const token = authHeader.substring(7);
-        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'default-secret');
-
-        const user = await Users.findById(decoded.userId).select("-passwordHash -passwordSalt");
+    try {
+        const user = await Users.findById(decoded.userId);
         if (!user) {
             return res.status(404).send({ message: "User not found" });
         }
@@ -284,8 +291,9 @@ userRouter.get("/profile", async (req, res) => {
             mobile: user.mobile,
             createdAt: user.createdAt
         });
-    } catch (e) {
-        res.status(401).send({ message: "Invalid token", error: e.message });
+    } catch (error) {
+        console.error("Unable to retrieve user profile:", error);
+        res.status(500).send({ message: "Unable to retrieve user profile" });
     }
 });
 
@@ -313,20 +321,25 @@ userRouter.get("/profile", async (req, res) => {
  *         description: Invalid token
  */
 userRouter.post("/verify", async (req, res) => {
+    const { token } = req.body;
+    if (!token) {
+        return res.status(400).send({ message: "Token is required" });
+    }
+
+    let decoded;
     try {
-        const { token } = req.body;
-        if (!token) {
-            return res.status(400).send({ message: "Token is required" });
-        }
+        decoded = jwt.verify(token, process.env.JWT_SECRET || "default-secret");
+    } catch (error) {
+        return res.status(401).send({ message: "Invalid token", error: error.message });
+    }
 
-        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'default-secret');
-        const user = await Users.findById(decoded.userId).select("-passwordHash -passwordSalt");
-
+    try {
+        const user = await Users.findById(decoded.userId);
         if (!user) {
             return res.status(404).send({ message: "User not found" });
         }
 
-        res.send({
+        return res.send({
             valid: true,
             user: {
                 id: user.id,
@@ -335,8 +348,9 @@ userRouter.post("/verify", async (req, res) => {
                 mobile: user.mobile
             }
         });
-    } catch (e) {
-        res.status(401).send({ message: "Invalid token", error: e.message });
+    } catch (error) {
+        console.error("Unable to verify user token:", error);
+        return res.status(500).send({ message: "Unable to verify user token" });
     }
 });
 
@@ -373,7 +387,7 @@ userRouter.post("/singleuser", async (req, res) => {
     }
 
     try {
-        const user = await Users.findById(decoded.userId).select("-passwordHash -passwordSalt");
+        const user = await Users.findById(decoded.userId);
         if (!user) {
             return res.status(404).send({ message: "User not found" });
         }
