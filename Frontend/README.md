@@ -93,7 +93,7 @@ The Next.js app is statically exported to `out/`; Cloudflare Pages serves those 
    - `NEXT_PUBLIC_CART_API_URL` (set to `/api/cart` when using the Pages proxy)
    - `NEXT_PUBLIC_ORDERS_API_URL` (set to `/api/orders` when using the Pages proxy)
 
-   When using the Pages proxies, the frontend calls `/api/users`, `/api/cart`, and `/api/orders` on its own origin. The Pages Functions forward these paths to the corresponding API Gateway host: `users.arb-api.qa.bikkam.online`, `cart.arb-api.qa.bikkam.online`, and `orders.arb-api.qa.bikkam.online`. Istio sends all three hosts to the Express API Gateway, which dispatches internally to each service. Signup and login remain public; protected requests require a valid password-login token verified by Users. Cart records are scoped to that user, and the Cart service also verifies tokens itself. Orders continue to verify tokens through Users and return only that user's orders. Auth0 tokens are not supported for cart or order operations. Card and UPI payment processing is not integrated; the current payment page records a demo order and payment method. Do not use the local `localhost` values from `.env.example` in production.
+   When using the Pages proxies, the frontend calls `/api/users`, `/api/cart`, and `/api/orders` on its own origin. All three Pages Functions forward to the single API origin `https://arb-api.qa.bikkam.online`; the path prefix selects the service through Application Gateway, APIM, Istio, and the Digital Experience API. The Users proxy preserves `/api/users` for path-based dispatch. Signup and login remain public; protected requests require a valid password-login token verified by Users. Cart records are scoped to that user, and the Cart service also verifies tokens itself. Orders continue to verify tokens through Users and return only that user's orders. Auth0 tokens are not supported for cart or order operations. Card and UPI payment processing is not integrated; the current payment page records a demo order and payment method. Do not use the local `localhost` values from `.env.example` in production.
 
 5. Add these server-side bindings in the Pages project environment settings. Mark credentials as secrets; never use the `NEXT_PUBLIC_` prefix for them.
 
@@ -104,6 +104,9 @@ The Next.js app is statically exported to `out/`; Cloudflare Pages serves those 
    - `AUTH0_MGMT_CLIENT_SECRET`
    - `FIRESTORE_SYNC_URL`
    - `FIRESTORE_SYNC_SECRET`
+   - `USERS_SERVICE_HTTP_URL=https://arb-api.qa.bikkam.online`
+   - `CART_SERVICE_HTTP_URL=https://arb-api.qa.bikkam.online`
+   - `ORDERS_SERVICE_HTTP_URL=https://arb-api.qa.bikkam.online`
 
 6. Deploy. In the Auth0 application settings, add the deployed site's `https://<your-domain>/callback` to **Allowed Callback URLs**, and the site origin to **Allowed Web Origins**. Also configure any custom Auth0 screens to load their assets from the deployed site's `/auth0-acul/` paths. Confirm the Firestore Worker is deployed and has the matching sync secret.
 
@@ -175,12 +178,12 @@ AUTH0_MGMT_CLIENT_ID=your-auth0-management-client-id
 AUTH0_MGMT_CLIENT_SECRET=your-auth0-management-client-secret
 FIRESTORE_SYNC_URL=https://your-worker.example.workers.dev
 FIRESTORE_SYNC_SECRET=your-shared-sync-secret
-USERS_SERVICE_HTTP_URL=http://users.arb-api.qa.bikkam.online
-CART_SERVICE_HTTP_URL=http://cart.arb-api.qa.bikkam.online
-ORDERS_SERVICE_HTTP_URL=http://orders.arb-api.qa.bikkam.online
+USERS_SERVICE_HTTP_URL=https://arb-api.qa.bikkam.online
+CART_SERVICE_HTTP_URL=https://arb-api.qa.bikkam.online
+ORDERS_SERVICE_HTTP_URL=https://arb-api.qa.bikkam.online
 ```
 
-Do not commit `.dev.vars`. In Cloudflare Pages project settings, set the build variables `NEXT_PUBLIC_USERS_API_URL=/api/users`, `NEXT_PUBLIC_CART_API_URL=/api/cart`, and `NEXT_PUBLIC_ORDERS_API_URL=/api/orders`. Add the three `*_SERVICE_HTTP_URL` values for the appropriate deployment environments. The Pages Functions proxy requests to the matching API Gateway host over HTTP, avoiding browser mixed-content blocking. The Cloudflare-to-origin leg is unencrypted until TLS is configured on the Istio ingress gateway; use this only for testing and configure HTTPS before handling real credentials. These URLs in `wrangler.toml` are non-secret defaults; set them in Cloudflare if they differ. Create proxied Cloudflare DNS records for all three API hosts pointing to the Istio ingress public IP, then apply the [API Gateway manifests](../.k8s/api-gateway/) and [Istio host configuration](../.k8s/app-gateway/app-gateway.yml) with the Users, Cart, and Orders VirtualServices. The API Gateway and Cart service need network access to the Users service for password-token verification.
+Do not commit `.dev.vars`. In Cloudflare Pages project settings, set the build variables `NEXT_PUBLIC_USERS_API_URL=/api/users`, `NEXT_PUBLIC_CART_API_URL=/api/cart`, and `NEXT_PUBLIC_ORDERS_API_URL=/api/orders`. Set all three `*_SERVICE_HTTP_URL` bindings to the same HTTPS origin shown above for each deployment environment. The Pages Functions proxy requests to that one public API hostname; the API path prefix determines the service. Configure a valid HTTPS certificate along the Cloudflare-to-Application-Gateway-to-APIM path before sending credentials. The URLs in `wrangler.toml` are non-secret local defaults; override them in Cloudflare only if the environment uses a different API hostname. Public DNS should contain only the `arb-api.qa.bikkam.online` API record pointing to Application Gateway; keep `digital-exp-api`, `users`, `cart`, and `orders` DNS records private in Azure and pointing to the Istio private IP. The `digital-exp-api` name is the private DNS alias and Kubernetes Service/Deployment name. Apply the Digital Experience API and Istio routing configuration for the APIM backend host and service paths. The Digital Experience API and Cart service need network access to the Users service for password-token verification.
 
 The token endpoint exchanges the authorization code and syncs the profile to the Firestore Worker. The email check in the login page calls the configured validation Worker directly. The Worker must be running and configured with the matching sync secret for those flows to work.
 

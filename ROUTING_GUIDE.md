@@ -22,13 +22,13 @@ Browser → Cloudflare Pages → Pages Function
         → users/cart/orders.arb-api.qa.bikkam.online
         → Cloudflare wildcard DNS → Application Gateway (public)
         → Istio ingress gateway (private IP)
-        → Istio Gateway/VirtualService → Express API Gateway
+        → Istio Gateway/VirtualService → Digital Experience API
         → Users / Cart / Orders ClusterIP Services
 
 Private Azure VNet:
 Client → Azure Private DNS service record
        → Istio ingress gateway (private IP)
-       → Istio Gateway/VirtualService → Express API Gateway
+       → Istio Gateway/VirtualService → Digital Experience API
        → Users / Cart / Orders ClusterIP Services
 ```
 
@@ -64,7 +64,7 @@ Browser → Cloudflare Pages → same-origin Pages Functions
         → users/cart/orders.arb-api.qa.bikkam.online
         → Cloudflare DNS proxy → Azure Load Balancer public IP
         → Istio ingress gateway → Istio Gateway/VirtualServices
-        → Express API Gateway → Users / Cart / Orders ClusterIP Services
+        → Digital Experience API → Users / Cart / Orders ClusterIP Services
 ```
 
 This guide uses **self-managed upstream Istio installed with `istioctl`**, not
@@ -78,23 +78,23 @@ updates yourself.
 
 ## API route map
 
-Use a DNS hostname per service. Istio sends every hostname to the Express API
-Gateway; Express performs the service dispatch without rewriting the path.
+Use a DNS hostname per service. Istio sends every hostname to the Digital
+Experience API, which performs service dispatch without rewriting the path.
 
 | Host and path | Istio destination | Express upstream | Routes |
 | --- | --- | ---: | --- |
-| `users.arb-api.qa.bikkam.online/auth/signup`, `/auth/login`, `/auth/profile` | `api-gateway:9000` | `users-service:8082` | Public signup/login; protected profile and user APIs |
-| `users.arb-api.qa.bikkam.online/api/me` | `api-gateway:9000` | `users-service:8082` | Auth0 token validation by Users |
-| `cart.arb-api.qa.bikkam.online/api/cart` and `/api/cart/{cartId}` | `api-gateway:9000` | `cart-service:8080` | Authenticated, user-scoped cart |
-| `orders.arb-api.qa.bikkam.online/api/orders` and `/api/orders/{orderId}` | `api-gateway:9000` | `orders-service:8081` | Authenticated order creation and retrieval |
-| `orders.arb-api.qa.bikkam.online/api/orders/{orderId}/status` | `api-gateway:9000` | `orders-service:8081` | Status update; still needs an admin-role check |
+| `users.arb-api.qa.bikkam.online/auth/signup`, `/auth/login`, `/auth/profile` | `digital-exp-api:9000` | `users-service:8082` | Public signup/login; protected profile and user APIs |
+| `users.arb-api.qa.bikkam.online/api/me` | `digital-exp-api:9000` | `users-service:8082` | Auth0 token validation by Users |
+| `cart.arb-api.qa.bikkam.online/api/cart` and `/api/cart/{cartId}` | `digital-exp-api:9000` | `cart-service:8080` | Authenticated, user-scoped cart |
+| `orders.arb-api.qa.bikkam.online/api/orders` and `/api/orders/{orderId}` | `digital-exp-api:9000` | `orders-service:8081` | Authenticated order creation and retrieval |
+| `orders.arb-api.qa.bikkam.online/api/orders/{orderId}/status` | `digital-exp-api:9000` | `orders-service:8081` | Status update; still needs an admin-role check |
 
 Route definitions live in [Cart](./cartMicroservice/features/cart/cart.route.js),
 [Orders](./OrdersMicroservice/features/order/order.route.js),
 [Users](./UserMicroservice/features/user/user.route.js).
 
 Users Swagger UI is available at `/api-docs` only after password-token
-authentication through the API Gateway.
+authentication through the Digital Experience API.
 
 ## Current AKS deployment steps
 
@@ -107,13 +107,14 @@ authentication through the API Gateway.
 1. Select an AKS Kubernetes version supported by the pinned upstream Istio
    release. Check Istio's current support policy and AKS networking
    compatibility.
-2. Build and push the API Gateway and Cart service images using the repository
-   workflow. Deploy them as a `Deployment` plus a private `ClusterIP` `Service`.
+2. Build and push the Digital Experience API and Cart service images using
+   the repository workflow. Deploy them as a `Deployment` plus a private
+   `ClusterIP` `Service`.
 3. Keep databases private and persistent. Store database URLs, JWT signing
    keys, and Auth0 credentials in Azure Key Vault or Kubernetes Secrets, not
    committed manifests or `.env` files.
-4. The API Gateway, Cart, and Orders services expose `/health`; Users uses a
-   TCP probe in the current manifest.
+4. The Digital Experience API, Cart, and Orders services expose `/health`;
+   Users uses a TCP probe in the current manifest.
 
 ### 2. Install upstream Istio with `istioctl`
 
@@ -178,10 +179,11 @@ without a tested migration window.
 
 ### 3. Add application routing
 
-Apply the project manifests in this order: API Gateway Deployment and Service,
+Apply the project manifests in this order: Digital Experience API Deployment
+and Service,
 Istio Gateway, then the Users, Cart, and Orders VirtualServices. The Gateway
 accepts all three service hosts, and each VirtualService routes the complete
-host to `api-gateway.domain-service-v3.svc.cluster.local:9000`. For example:
+host to `digital-exp-api.domain-service-v3.svc.cluster.local:9000`. For example:
 
 ```yaml
 apiVersion: networking.istio.io/v1
@@ -203,21 +205,27 @@ spec:
         - orders.arb-api.qa.bikkam.online
 ```
 
-Run the repository's manual image-build workflow first so the Cart and API
-Gateway `latest` images are published. Then apply the updated workloads and
-routes:
+Run the repository's manual image-build workflow first so the Cart and Digital
+Experience API `latest` images are published. Then apply the updated workloads
+and routes:
 
 ```bash
 kubectl apply -f .k8s/cart-service/deployment.yml
-kubectl apply -f .k8s/api-gateway/service.yml
-kubectl apply -f .k8s/api-gateway/deployment.yml
+kubectl apply -f .k8s/digital-exp-api/service.yml
+kubectl apply -f .k8s/digital-exp-api/deployment.yml
 kubectl apply -f .k8s/app-gateway/app-gateway.yml
+kubectl apply -f .k8s/digital-exp-api/virtual-service.yml
 kubectl apply -f .k8s/user-service/virtual-service.yml
 kubectl apply -f .k8s/cart-service/virtual-service.yml
 kubectl apply -f .k8s/order-service/virtual-service.yml
 kubectl rollout status deployment/cart-service -n domain-service-v3
-kubectl rollout status deployment/api-gateway -n domain-service-v3
+kubectl rollout status deployment/digital-exp-api -n domain-service-v3
 ```
+
+The renamed Deployment and Service are new Kubernetes resources. Deploy and
+validate them before removing the old `api-gateway` Deployment and Service;
+do not try to change an existing Deployment selector in place because
+Kubernetes selectors are immutable.
 
 The checked-in Gateway currently listens on HTTP port 80 only. Do not configure
 Cloudflare **Full (strict)** until a valid origin certificate and HTTPS
@@ -290,7 +298,7 @@ credentials in server-side secret storage.
 
 ### 6. Keep service-to-service traffic inside AKS
 
-The API Gateway and both the Cart and Orders services verify password-login
+The Digital Experience API and both the Cart and Orders services verify password-login
 tokens by calling Users. Set `USERS_SERVICE_URL` to the internal Kubernetes
 Service name; the included manifests use
 `http://users-service.domain-service-v3.svc.cluster.local:8082`. Do not send
@@ -299,7 +307,8 @@ internal service traffic through Cloudflare or the public ingress.
 ## Gateway roles and migration safety
 
 There are two different components that may be called a “gateway” in this
-project. The Express API Gateway is part of the current routing path. Azure
+project. The Digital Experience API (the Express API gateway) is part of the
+current routing path. Azure
 Application Gateway is planned as the public entry point for the private-Istio
 target.
 
@@ -318,12 +327,12 @@ Keep a rollback route until the new path is stable. Do not delete shared
 gateways, subnets, public IPs, identities, or controllers based only on their
 names.
 
-### The repository's Express `api-gateway` service
+### The repository's `digital-exp-api` service
 
-The Compose file also defines a separate Node.js service named `api-gateway`
+The Compose file also defines a separate Node.js service named `digital-exp-api`
 on port 9000. It is not Azure Application Gateway or an Istio ingress
-gateway. The new hostname routes all terminate at this Express service, which
-dispatches by hostname and validates password-login tokens through Users.
+gateway. The new hostname routes all terminate at the Digital Experience API,
+which dispatches by hostname and validates password-login tokens through Users.
 Signup and login are public. The older path-based `/api/*` routes retain their
 Auth0 JWT validation; they are not the route used by the three service
 hostnames.
@@ -372,7 +381,7 @@ Resolve these existing API limitations before exposing the services publicly:
   and Application Gateway can reach Istio while preserving the service host.
 - The Istio `Gateway` accepts the expected host and presents the correct TLS
   certificate.
-- Each hostname reaches the Express API Gateway, which dispatches to the
+- Each hostname reaches the Digital Experience API, which dispatches to the
   correct AKS `ClusterIP` Service without path rewrites.
 - Signup/login work without a token; protected routes reject missing or
   invalid password-login tokens.

@@ -1,8 +1,8 @@
 # Local Development and Cloudflare Testing - KFC Application
 
-This guide covers local development and testing. For the current API Gateway and
-Cloudflare Pages flow, use the **Docker Compose and Cloudflare Pages Testing**
-section.
+This guide covers local development and testing. For the current Digital
+Experience API and Cloudflare Pages flow, use the **Docker Compose and
+Cloudflare Pages Testing** section.
 
 ---
 
@@ -266,28 +266,29 @@ export const PRODUCTS_API_URL = 'http://localhost:8083';
 
 The current frontend is a static Next.js site with Cloudflare Pages Functions.
 The Functions call three service hostnames, and Istio sends all three to the
-Express API Gateway. Use the steps below to test the full flow locally or with
+Digital Experience API (the Express API gateway). Use the steps below to test
+the full flow locally or with
 a deployed Cloudflare Pages site.
 
-### A. Start the API Gateway and services with Docker
+### A. Start the Digital Experience API and services with Docker
 
-Run these commands from the repository root. Starting `api-gateway` also
+Run these commands from the repository root. Starting `digital-exp-api` also
 starts its dependent services and databases:
 
 ```powershell
-docker compose up --build -d api-gateway
+docker compose up --build -d digital-exp-api
 docker compose ps
 curl.exe http://localhost:9000/health
 ```
 
-The health request should return JSON with `"service":"api-gateway"`. To watch
+The health request should return JSON with `"service":"digital-exp-api"`. To watch
 startup logs:
 
 ```powershell
-docker compose logs -f api-gateway users-service cart-service orders-service
+docker compose logs -f digital-exp-api users-service cart-service orders-service
 ```
 
-Test that the Gateway routes by hostname. For example, a password login request
+Test that the Digital Experience API routes by hostname. For example, a password login request
 can be sent directly to the Gateway with the Users host:
 
 ```powershell
@@ -307,7 +308,7 @@ curl.exe -i http://localhost:9000/api/cart `
 
 ### B. Run Cloudflare Pages Functions locally against Docker
 
-The API base paths in `Frontend/.env` should be:
+The frontend API base paths in `Frontend/.env` should be:
 
 ```dotenv
 NEXT_PUBLIC_USERS_API_URL=/api/users
@@ -391,7 +392,7 @@ Remove the hosts-file line after local testing.
 
 ### C. Configure Cloudflare for a deployed Pages site
 
-For remote Pages testing, the API Gateway must be reachable at the public
+For remote Pages testing, the Digital Experience API must be reachable at the public
 Istio ingress IP. Build and push the Gateway and Cart images with the
 repository's manual image-build workflow, then apply the Kubernetes manifests
 using the steps in [ROUTING_GUIDE.md](./ROUTING_GUIDE.md).
@@ -475,7 +476,7 @@ resolve or connect to Azure Private DNS or the Istio private IP directly.
    balancer annotation (and the selected private IP, if using a static one).
    Verify that Azure assigns a private IP and that the existing Istio Gateway
    and VirtualServices still route the `users`, `cart`, and `orders` hosts to
-   the Express API Gateway. This change can interrupt ingress; keep a rollback
+   the Digital Experience API. This change can interrupt ingress; keep a rollback
    plan and schedule a maintenance window.
 3. **Create split-horizon private DNS.** Create an Azure Private DNS zone named
    `arb-api.qa.bikkam.online`, link it to the AKS VNet and any VNet where

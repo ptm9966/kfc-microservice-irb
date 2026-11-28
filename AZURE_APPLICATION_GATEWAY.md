@@ -21,18 +21,18 @@ Browser → Cloudflare Pages → Pages Function
         → Application Gateway wildcard listener and rule
         → Istio internal LoadBalancer (private IP)
         → Istio Gateway / service VirtualServices
-        → Express API Gateway → Users / Cart / Orders ClusterIP Services
+        → Digital Experience API → Users / Cart / Orders ClusterIP Services
 
 Private Azure VNet:
 Client → Azure Private DNS service hostname
        → Istio internal LoadBalancer (private IP)
        → Istio Gateway / service VirtualServices
-       → Express API Gateway → Users / Cart / Orders ClusterIP Services
+       → Digital Experience API → Users / Cart / Orders ClusterIP Services
 ```
 
 The listener accepts the three service hostnames. Application Gateway forwards
 the request to Istio without overriding its original `Host` header. Istio
-matches that hostname to its VirtualService; the Express API Gateway then
+matches that hostname to its VirtualService; the Digital Experience API then
 dispatches to the appropriate Kubernetes Service.
 
 ## Listener and multi-site explained
@@ -119,7 +119,7 @@ Create one **Basic routing rule**:
 | Priority | Unique; more-specific hostname rules take precedence |
 
 The Basic rule sends all paths accepted by this listener to the same Istio
-backend. That is sufficient because Istio and the Express API Gateway handle
+backend. That is sufficient because Istio and the Digital Experience API handle
 the per-service routing after Application Gateway.
 
 ## Public and private DNS
@@ -166,7 +166,7 @@ the private service names.
 ## Istio routing
 
 Keep the separate Istio VirtualServices and their exact hostnames. Each should
-route to the internal Express API Gateway Service. For example:
+route to the internal Digital Experience API Service. For example:
 
 ```yaml
 spec:

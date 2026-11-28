@@ -43,7 +43,7 @@ This application follows a microservices architecture:
 - **Orders Microservice** (Port 8081): Handles order creation, retrieval, and status updates
 - **Users Microservice** (Port 8082): Manages authentication and users
 - **Products Microservice** (Port 8083): Manages the product catalog
-- **API Gateway** (Port 9000): Routes API requests to the microservices
+- **Digital Experience API** (Express API Gateway, Port 9000): Routes API requests to the microservices
 - **Frontend** (Port 3000): React application that communicates with the services
 - **Databases**: SQL Server, with a separate database for each microservice
 
@@ -77,7 +77,7 @@ This starts the API and database services:
 - Orders Microservice (port 8081)
 - Users Microservice (port 8082)
 - Products Microservice (port 8083)
-- API Gateway (port 9000)
+- Digital Experience API (port 9000)
 
 Start the Frontend separately from `/Frontend`.
 

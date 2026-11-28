@@ -1,23 +1,23 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: api-gateway
+  name: digital-exp-api
   namespace: domain-service-v3
   labels:
-    app: api-gateway
+    app: digital-exp-api
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: api-gateway
+      app: digital-exp-api
   template:
     metadata:
       labels:
-        app: api-gateway
+        app: digital-exp-api
     spec:
       containers:
-        - name: api-gateway
-          image: ghcr.io/ptm9966/kfc-api-gateway-irb:latest
+        - name: digital-exp-api
+          image: ghcr.io/ptm9966/kfc-digital-exp-api-irb:latest
           imagePullPolicy: Always
           ports:
             - name: http
@@ -28,6 +28,8 @@ spec:
               value: production
             - name: PORT
               value: "9000"
+            - name: DIGITAL_EXP_API_HOST
+              value: digital-exp-api.arb-api.qa.bikkam.online
             - name: USERS_API_HOST
               value: users.arb-api.qa.bikkam.online
             - name: CART_API_HOST

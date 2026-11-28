@@ -1,7 +1,7 @@
 # Docker Compose Setup Guide
 
-The root Compose file starts the microservices, API Gateway, and shared local
-SQL Server. The Frontend is started separately.
+The root Compose file starts the microservices, Digital Experience API, and
+shared local SQL Server. The Frontend is started separately.
 
 ## Prerequisites
 
@@ -24,7 +24,7 @@ docker compose ps
 ```
 
 Compose starts the shared SQL Server and the Cart, Orders, Users, Products, and
-API Gateway services. The services use separate databases on the SQL Server:
+Digital Experience API service. The services use separate databases on the SQL Server:
 `cart-database`, `orders-database`, `users-database`, and `products-database`.
 The Product database starts empty.
 
@@ -34,7 +34,7 @@ The Product database starts empty.
 - Orders API and docs: http://localhost:8081
 - Users API and docs: http://localhost:8082
 - Products API and docs: http://localhost:8083
-- API Gateway: http://localhost:9000
+- Digital Experience API: http://localhost:9000
 - SQL Server: `localhost,14330`
 
 ## Logs and shutdown

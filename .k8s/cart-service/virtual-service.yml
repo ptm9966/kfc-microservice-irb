@@ -14,6 +14,6 @@ spec:
             prefix: /
       route:
         - destination:
-            host: api-gateway.domain-service-v3.svc.cluster.local
+            host: digital-exp-api.domain-service-v3.svc.cluster.local
             port:
               number: 9000

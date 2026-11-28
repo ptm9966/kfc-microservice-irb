@@ -14,7 +14,7 @@ function getHttpOrigin(value) {
   try {
     const origin = new URL(value);
     if (
-      origin.protocol !== 'http:' ||
+      !['http:', 'https:'].includes(origin.protocol) ||
       origin.username ||
       origin.password ||
       origin.pathname !== '/' ||

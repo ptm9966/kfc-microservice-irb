@@ -164,12 +164,12 @@ services:
       retries: 3
       start_period: 40s
 
-  # API Gateway
-  api-gateway:
+  # Digital Experience API
+  digital-exp-api:
     build:
-      context: ./api-gateway
+      context: ./digital-exp-api
       dockerfile: Dockerfile
-    container_name: kfc-api-gateway
+    container_name: kfc-digital-exp-api
     restart: always
     ports:
       - "9000:9000"
@@ -178,6 +178,7 @@ services:
       PORT: 9000
       AUTH0_ISSUER: https://dev-6l85tc0ex15xt2oe.us.auth0.com/
       AUTH0_AUDIENCE: http://localhost:8082
+      DIGITAL_EXP_API_HOST: digital-exp-api.arb-api.qa.bikkam.online
       USERS_SERVICE_URL: http://users-service:8082
       ORDERS_SERVICE_URL: http://orders-service:8081
       CART_SERVICE_URL: http://cart-service:8080

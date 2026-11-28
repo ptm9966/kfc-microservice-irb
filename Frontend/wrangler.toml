@@ -4,6 +4,6 @@ pages_build_output_dir = "./out"
 
 [vars]
 AUTH0_DOMAIN = "login.bikkam.online"
-USERS_SERVICE_HTTP_URL = "http://users.arb-api.qa.bikkam.online"
-CART_SERVICE_HTTP_URL = "http://cart.arb-api.qa.bikkam.online"
-ORDERS_SERVICE_HTTP_URL = "http://orders.arb-api.qa.bikkam.online"
+USERS_SERVICE_HTTP_URL = "https://arb-api.qa.bikkam.online"
+CART_SERVICE_HTTP_URL = "https://arb-api.qa.bikkam.online"
+ORDERS_SERVICE_HTTP_URL = "https://arb-api.qa.bikkam.online"
