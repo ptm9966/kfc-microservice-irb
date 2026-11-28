@@ -2,7 +2,7 @@ apiVersion: networking.istio.io/v1
 kind: VirtualService
 metadata:
   name: digital-exp-api
-  namespace: domain-service-v3
+  namespace: domain-services-v3
 spec:
   hosts:
     - digital-exp-api.arb-api.qa.bikkam.online

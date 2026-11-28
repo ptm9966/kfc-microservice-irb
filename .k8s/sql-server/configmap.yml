@@ -2,99 +2,10 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: kfc-sql-server-bootstrap
-  namespace: domain-service-v3
+  namespace: domain-services-v3
 data:
   bootstrap.sql: |
     IF DB_ID(N'users-database') IS NULL CREATE DATABASE [users-database];
     IF DB_ID(N'orders-database') IS NULL CREATE DATABASE [orders-database];
     IF DB_ID(N'cart-database') IS NULL CREATE DATABASE [cart-database];
     IF DB_ID(N'products-database') IS NULL CREATE DATABASE [products-database];
-    GO
-
-    DECLARE @usersPassword NVARCHAR(128) = N'$(USERS_SQL_PASSWORD)';
-    IF SUSER_ID(N'users_app') IS NULL
-    BEGIN
-        DECLARE @usersLoginSql NVARCHAR(MAX) =
-            N'CREATE LOGIN [users_app] WITH PASSWORD = ' +
-            QUOTENAME(@usersPassword, '''') + N', CHECK_POLICY = ON';
-        EXEC(@usersLoginSql);
-    END;
-
-    DECLARE @ordersPassword NVARCHAR(128) = N'$(ORDERS_SQL_PASSWORD)';
-    IF SUSER_ID(N'orders_app') IS NULL
-    BEGIN
-        DECLARE @ordersLoginSql NVARCHAR(MAX) =
-            N'CREATE LOGIN [orders_app] WITH PASSWORD = ' +
-            QUOTENAME(@ordersPassword, '''') + N', CHECK_POLICY = ON';
-        EXEC(@ordersLoginSql);
-    END;
-
-    DECLARE @cartPassword NVARCHAR(128) = N'$(CART_SQL_PASSWORD)';
-    IF SUSER_ID(N'cart_app') IS NULL
-    BEGIN
-        DECLARE @cartLoginSql NVARCHAR(MAX) =
-            N'CREATE LOGIN [cart_app] WITH PASSWORD = ' +
-            QUOTENAME(@cartPassword, '''') + N', CHECK_POLICY = ON';
-        EXEC(@cartLoginSql);
-    END;
-    GO
-
-    USE [users-database];
-    IF DATABASE_PRINCIPAL_ID(N'users_app') IS NULL
-        CREATE USER [users_app] FOR LOGIN [users_app];
-    IF NOT EXISTS (
-        SELECT 1 FROM sys.database_role_members
-        WHERE role_principal_id = DATABASE_PRINCIPAL_ID(N'db_datareader')
-          AND member_principal_id = DATABASE_PRINCIPAL_ID(N'users_app')
-    ) ALTER ROLE db_datareader ADD MEMBER [users_app];
-    IF NOT EXISTS (
-        SELECT 1 FROM sys.database_role_members
-        WHERE role_principal_id = DATABASE_PRINCIPAL_ID(N'db_datawriter')
-          AND member_principal_id = DATABASE_PRINCIPAL_ID(N'users_app')
-    ) ALTER ROLE db_datawriter ADD MEMBER [users_app];
-    IF NOT EXISTS (
-        SELECT 1 FROM sys.database_role_members
-        WHERE role_principal_id = DATABASE_PRINCIPAL_ID(N'db_ddladmin')
-          AND member_principal_id = DATABASE_PRINCIPAL_ID(N'users_app')
-    ) ALTER ROLE db_ddladmin ADD MEMBER [users_app];
-    GO
-
-    USE [orders-database];
-    IF DATABASE_PRINCIPAL_ID(N'orders_app') IS NULL
-        CREATE USER [orders_app] FOR LOGIN [orders_app];
-    IF NOT EXISTS (
-        SELECT 1 FROM sys.database_role_members
-        WHERE role_principal_id = DATABASE_PRINCIPAL_ID(N'db_datareader')
-          AND member_principal_id = DATABASE_PRINCIPAL_ID(N'orders_app')
-    ) ALTER ROLE db_datareader ADD MEMBER [orders_app];
-    IF NOT EXISTS (
-        SELECT 1 FROM sys.database_role_members
-        WHERE role_principal_id = DATABASE_PRINCIPAL_ID(N'db_datawriter')
-          AND member_principal_id = DATABASE_PRINCIPAL_ID(N'orders_app')
-    ) ALTER ROLE db_datawriter ADD MEMBER [orders_app];
-    IF NOT EXISTS (
-        SELECT 1 FROM sys.database_role_members
-        WHERE role_principal_id = DATABASE_PRINCIPAL_ID(N'db_ddladmin')
-          AND member_principal_id = DATABASE_PRINCIPAL_ID(N'orders_app')
-    ) ALTER ROLE db_ddladmin ADD MEMBER [orders_app];
-    GO
-
-    USE [cart-database];
-    IF DATABASE_PRINCIPAL_ID(N'cart_app') IS NULL
-        CREATE USER [cart_app] FOR LOGIN [cart_app];
-    IF NOT EXISTS (
-        SELECT 1 FROM sys.database_role_members
-        WHERE role_principal_id = DATABASE_PRINCIPAL_ID(N'db_datareader')
-          AND member_principal_id = DATABASE_PRINCIPAL_ID(N'cart_app')
-    ) ALTER ROLE db_datareader ADD MEMBER [cart_app];
-    IF NOT EXISTS (
-        SELECT 1 FROM sys.database_role_members
-        WHERE role_principal_id = DATABASE_PRINCIPAL_ID(N'db_datawriter')
-          AND member_principal_id = DATABASE_PRINCIPAL_ID(N'cart_app')
-    ) ALTER ROLE db_datawriter ADD MEMBER [cart_app];
-    IF NOT EXISTS (
-        SELECT 1 FROM sys.database_role_members
-        WHERE role_principal_id = DATABASE_PRINCIPAL_ID(N'db_ddladmin')
-          AND member_principal_id = DATABASE_PRINCIPAL_ID(N'cart_app')
-    ) ALTER ROLE db_ddladmin ADD MEMBER [cart_app];
-    GO

@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: digital-exp-api
-  namespace: domain-service-v3
+  namespace: domain-services-v3
   labels:
     app: digital-exp-api
 spec:
@@ -37,11 +37,11 @@ spec:
             - name: ORDERS_API_HOST
               value: orders.arb-api.qa.bikkam.online
             - name: USERS_SERVICE_URL
-              value: http://users-service.domain-service-v3.svc.cluster.local:8082
+              value: http://users-service.domain-services-v3.svc.cluster.local:8082
             - name: CART_SERVICE_URL
-              value: http://cart-service.domain-service-v3.svc.cluster.local:8080
+              value: http://cart-service.domain-services-v3.svc.cluster.local:8080
             - name: ORDERS_SERVICE_URL
-              value: http://orders-service.domain-service-v3.svc.cluster.local:8081
+              value: http://orders-service.domain-services-v3.svc.cluster.local:8081
           readinessProbe:
             httpGet:
               path: /health

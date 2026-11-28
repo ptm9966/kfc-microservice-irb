@@ -2,7 +2,7 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: sql-data-kfc-sql-server
-  namespace: domain-service-v3
+  namespace: domain-services-v3
 spec:
   storageClassName: kfc-sql-server-storage
   accessModes:

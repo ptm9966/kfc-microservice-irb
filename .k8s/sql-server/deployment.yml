@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: kfc-sql-server
-  namespace: domain-service-v3
+  namespace: domain-services-v3
   labels:
     app: kfc-sql-server
 spec:
@@ -34,6 +34,8 @@ spec:
               value: "Y"
             - name: MSSQL_PID
               value: Developer
+            - name: MSSQL_MEMORY_LIMIT_MB
+              value: "3072"
             - name: MSSQL_SA_PASSWORD
               valueFrom:
                 secretKeyRef:
@@ -46,8 +48,8 @@ spec:
                 - -ec
                 - /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -C -Q "SELECT 1"
             periodSeconds: 10
-            timeoutSeconds: 5
-            failureThreshold: 30
+            timeoutSeconds: 15
+            failureThreshold: 60
           readinessProbe:
             exec:
               command:
@@ -55,7 +57,7 @@ spec:
                 - -ec
                 - /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -C -Q "SELECT 1"
             periodSeconds: 10
-            timeoutSeconds: 5
+            timeoutSeconds: 15
             failureThreshold: 3
           livenessProbe:
             exec:
@@ -64,15 +66,8 @@ spec:
                 - -ec
                 - /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -C -Q "SELECT 1"
             periodSeconds: 20
-            timeoutSeconds: 5
+            timeoutSeconds: 15
             failureThreshold: 3
-          resources:
-            requests:
-              cpu: 125m
-              memory: 125Mi
-            limits:
-              cpu: 125m
-              memory: 125Mi
           volumeMounts:
             - name: sql-data
               mountPath: /var/opt/mssql

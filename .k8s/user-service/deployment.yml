@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: users-service
-  namespace: domain-service-v3
+  namespace: domain-services-v3
   labels:
     app: users-service
 spec:
@@ -29,7 +29,7 @@ spec:
             - name: PORT
               value: "8082"
             - name: SQL_SERVER
-              value: kfc-sql-server.domain-service-v3.svc.cluster.local
+              value: kfc-sql-server.domain-services-v3.svc.cluster.local
             - name: SQL_PORT
               value: "1433"
             - name: SQL_DATABASE
@@ -43,15 +43,12 @@ spec:
             - name: SQL_AUTO_CREATE_SCHEMA
               value: "true"
             - name: SQL_USER
-              valueFrom:
-                secretKeyRef:
-                  name: user-service-secrets
-                  key: SQL_USER
+              value: sa
             - name: SQL_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: user-service-secrets
-                  key: SQL_PASSWORD
+                  name: kfc-sql-server-secrets
+                  key: MSSQL_SA_PASSWORD
             - name: JWT_SECRET
               valueFrom:
                 secretKeyRef:

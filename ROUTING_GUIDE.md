@@ -183,14 +183,14 @@ Apply the project manifests in this order: Digital Experience API Deployment
 and Service,
 Istio Gateway, then the Users, Cart, and Orders VirtualServices. The Gateway
 accepts all three service hosts, and each VirtualService routes the complete
-host to `digital-exp-api.domain-service-v3.svc.cluster.local:9000`. For example:
+host to `digital-exp-api.domain-services-v3.svc.cluster.local:9000`. For example:
 
 ```yaml
 apiVersion: networking.istio.io/v1
 kind: Gateway
 metadata:
   name: app-gateway
-  namespace: domain-service-v3
+  namespace: domain-services-v3
 spec:
   selector:
     istio: ingressgateway
@@ -218,8 +218,8 @@ kubectl apply -f .k8s/digital-exp-api/virtual-service.yml
 kubectl apply -f .k8s/user-service/virtual-service.yml
 kubectl apply -f .k8s/cart-service/virtual-service.yml
 kubectl apply -f .k8s/order-service/virtual-service.yml
-kubectl rollout status deployment/cart-service -n domain-service-v3
-kubectl rollout status deployment/digital-exp-api -n domain-service-v3
+kubectl rollout status deployment/cart-service -n domain-services-v3
+kubectl rollout status deployment/digital-exp-api -n domain-services-v3
 ```
 
 The renamed Deployment and Service are new Kubernetes resources. Deploy and
@@ -301,7 +301,7 @@ credentials in server-side secret storage.
 The Digital Experience API and both the Cart and Orders services verify password-login
 tokens by calling Users. Set `USERS_SERVICE_URL` to the internal Kubernetes
 Service name; the included manifests use
-`http://users-service.domain-service-v3.svc.cluster.local:8082`. Do not send
+`http://users-service.domain-services-v3.svc.cluster.local:8082`. Do not send
 internal service traffic through Cloudflare or the public ingress.
 
 ## Gateway roles and migration safety

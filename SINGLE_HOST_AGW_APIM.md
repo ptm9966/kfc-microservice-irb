@@ -1,5 +1,11 @@
 # Single-host API routing migration plan
 
+> This plan describes an APIM-included target architecture. The current QA
+> configuration described by the user routes Application Gateway directly to
+> the private `digital-exp-api` DNS record and therefore bypasses APIM. For
+> those steps, use
+> [SINGLE_HOST_CLOUDFLARE_APP_GATEWAY.md](./SINGLE_HOST_CLOUDFLARE_APP_GATEWAY.md).
+
 ## Goal
 
 Expose the backend to the frontend through one public hostname:

@@ -184,9 +184,9 @@ remove it before creating the Deployment. Its PVC is retained and reused by the
 Deployment:
 
 ```powershell
-kubectl scale statefulset/kfc-sql-server --replicas=0 -n domain-service-v3
-kubectl delete statefulset/kfc-sql-server -n domain-service-v3
-kubectl delete service/kfc-sql-server-headless -n domain-service-v3 --ignore-not-found
+kubectl scale statefulset/kfc-sql-server --replicas=0 -n domain-services-v3
+kubectl delete statefulset/kfc-sql-server -n domain-services-v3
+kubectl delete service/kfc-sql-server-headless -n domain-services-v3 --ignore-not-found
 ```
 
 ```powershell
@@ -202,7 +202,7 @@ kubectl apply -f .k8s/sql-server/persistent-volume-claim.yml
 kubectl apply -f .k8s/sql-server/deployment.yml
 kubectl apply -f .k8s/sql-server/configmap.yml
 kubectl apply -f .k8s/sql-server/job.yml
-kubectl wait --for=condition=complete job/kfc-sql-server-bootstrap -n domain-service-v3 --timeout=15m
+kubectl wait --for=condition=complete job/kfc-sql-server-bootstrap -n domain-services-v3 --timeout=15m
 ```
 
 Use distinct strong URL-safe passwords in the service Secrets. The manifest

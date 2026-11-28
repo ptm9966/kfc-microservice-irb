@@ -2,7 +2,7 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: kfc-sql-server-bootstrap
-  namespace: domain-service-v3
+  namespace: domain-services-v3
 spec:
   backoffLimit: 12
   ttlSecondsAfterFinished: 86400
@@ -30,9 +30,6 @@ spec:
                 sleep 5
               done
               "$SQLCMD" -b -S kfc-sql-server -U sa -P "$MSSQL_SA_PASSWORD" -C \
-                -v USERS_SQL_PASSWORD="$USERS_SQL_PASSWORD" \
-                   ORDERS_SQL_PASSWORD="$ORDERS_SQL_PASSWORD" \
-                   CART_SQL_PASSWORD="$CART_SQL_PASSWORD" \
                 -i /bootstrap/bootstrap.sql
           env:
             - name: MSSQL_SA_PASSWORD
@@ -40,21 +37,6 @@ spec:
                 secretKeyRef:
                   name: kfc-sql-server-secrets
                   key: MSSQL_SA_PASSWORD
-            - name: USERS_SQL_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: user-service-secrets
-                  key: SQL_PASSWORD
-            - name: ORDERS_SQL_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: orders-service-secrets
-                  key: SQL_PASSWORD
-            - name: CART_SQL_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: cart-service-secrets
-                  key: SQL_PASSWORD
           volumeMounts:
             - name: bootstrap
               mountPath: /bootstrap
