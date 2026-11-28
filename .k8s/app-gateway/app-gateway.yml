@@ -2,7 +2,7 @@ apiVersion: networking.istio.io/v1
 kind: Gateway
 metadata:
   name: app-gateway
-  namespace: domain-service-v3
+  namespace: domain-services-v3
 spec:
   selector:
     istio: ingressgateway

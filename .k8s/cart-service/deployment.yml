@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: cart-service
-  namespace: domain-service-v3
+  namespace: domain-services-v3
   labels:
     app: cart-service
 spec:
@@ -44,9 +44,9 @@ spec:
                   name: kfc-secrets
                   key: MONGO_INITDB_DATABASE
             - name: DB_URL
-              value: mongodb://$(MONGO_USERNAME):$(MONGO_PASSWORD)@kfc-mongodb.domain-service-v3.svc.cluster.local:27017/$(MONGO_DATABASE)?authSource=admin
+              value: mongodb://$(MONGO_USERNAME):$(MONGO_PASSWORD)@kfc-mongodb.domain-services-v3.svc.cluster.local:27017/$(MONGO_DATABASE)?authSource=admin
             - name: USERS_SERVICE_URL
-              value: http://users-service.domain-service-v3.svc.cluster.local:8082
+              value: http://users-service.domain-services-v3.svc.cluster.local:8082
           readinessProbe:
             httpGet:
               path: /health

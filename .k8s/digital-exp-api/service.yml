@@ -1,14 +1,14 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: api-gateway
-  namespace: domain-service-v3
+  name: digital-exp-api
+  namespace: domain-services-v3
   labels:
-    app: api-gateway
+    app: digital-exp-api
 spec:
   type: ClusterIP
   selector:
-    app: api-gateway
+    app: digital-exp-api
   ports:
     - name: http
       port: 9000

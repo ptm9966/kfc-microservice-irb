@@ -2,7 +2,7 @@ apiVersion: v1
 kind: Secret
 metadata:
   name: kfc-secrets
-  namespace: domain-service-v3
+  namespace: domain-services-v3
 type: Opaque
 data:
   # Base64 encoded values - replace with actual encoded values

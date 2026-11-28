@@ -1,23 +1,23 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: api-gateway
-  namespace: domain-service-v3
+  name: digital-exp-api
+  namespace: domain-services-v3
   labels:
-    app: api-gateway
+    app: digital-exp-api
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: api-gateway
+      app: digital-exp-api
   template:
     metadata:
       labels:
-        app: api-gateway
+        app: digital-exp-api
     spec:
       containers:
-        - name: api-gateway
-          image: ghcr.io/ptm9966/kfc-api-gateway-irb:latest
+        - name: digital-exp-api
+          image: ghcr.io/ptm9966/kfc-digital-exp-api-irb:latest
           imagePullPolicy: Always
           ports:
             - name: http
@@ -35,11 +35,11 @@ spec:
             - name: ORDERS_API_HOST
               value: orders.arb-api.qa.bikkam.online
             - name: USERS_SERVICE_URL
-              value: http://users-service.domain-service-v3.svc.cluster.local:8082
+              value: http://users-service.domain-services-v3.svc.cluster.local:8082
             - name: CART_SERVICE_URL
-              value: http://cart-service.domain-service-v3.svc.cluster.local:8080
+              value: http://cart-service.domain-services-v3.svc.cluster.local:8080
             - name: ORDERS_SERVICE_URL
-              value: http://orders-service.domain-service-v3.svc.cluster.local:8081
+              value: http://orders-service.domain-services-v3.svc.cluster.local:8081
           readinessProbe:
             httpGet:
               path: /health

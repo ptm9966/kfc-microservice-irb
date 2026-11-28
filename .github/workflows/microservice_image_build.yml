@@ -56,20 +56,20 @@ jobs:
             -t ghcr.io/ptm9966/kfc-cartmicroservice-irb:${{ github.sha }} \
             -t ghcr.io/ptm9966/kfc-cartmicroservice-irb:latest .
           docker images
-     - name: "api-gateway-image-build"
-       working-directory: api-gateway
+     - name: "digital-exp-api-image-build"
+       working-directory: digital-exp-api
        run: |
           docker build -f Dockerfile \
-            -t ghcr.io/ptm9966/kfc-api-gateway-irb:${{ github.sha }} \
-            -t ghcr.io/ptm9966/kfc-api-gateway-irb:latest .
+            -t ghcr.io/ptm9966/kfc-digital-exp-api-irb:${{ github.sha }} \
+            -t ghcr.io/ptm9966/kfc-digital-exp-api-irb:latest .
 
 
      - name: "Push image to github"
        run: |
           docker push ghcr.io/ptm9966/kfc-cartmicroservice-irb:${{ github.sha }}
           docker push ghcr.io/ptm9966/kfc-cartmicroservice-irb:latest
-          docker push ghcr.io/ptm9966/kfc-api-gateway-irb:${{ github.sha }}
-          docker push ghcr.io/ptm9966/kfc-api-gateway-irb:latest
+          docker push ghcr.io/ptm9966/kfc-digital-exp-api-irb:${{ github.sha }}
+          docker push ghcr.io/ptm9966/kfc-digital-exp-api-irb:latest
           docker push ghcr.io/ptm9966/kfc-usermicroservice-irb:${{ github.sha }}
           docker push ghcr.io/ptm9966/kfc-usermicroservice-irb:latest
           docker push ghcr.io/ptm9966/kfc-productmicroservice-irb:${{ github.sha }}

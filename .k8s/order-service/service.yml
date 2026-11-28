@@ -2,7 +2,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: orders-service
-  namespace: domain-service-v3
+  namespace: domain-services-v3
   labels:
     app: orders-service
 spec:

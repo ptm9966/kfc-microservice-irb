@@ -2,7 +2,7 @@ apiVersion: networking.istio.io/v1
 kind: VirtualService
 metadata:
   name: cart-service
-  namespace: domain-service-v3
+  namespace: domain-services-v3
 spec:
   hosts:
     - cart.arb-api.qa.bikkam.online
@@ -14,6 +14,6 @@ spec:
             prefix: /
       route:
         - destination:
-            host: api-gateway.domain-service-v3.svc.cluster.local
+            host: digital-exp-api.domain-services-v3.svc.cluster.local
             port:
               number: 9000

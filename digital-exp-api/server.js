@@ -14,7 +14,7 @@ app.use(cors());
 app.use(express.json());
 
 app.get("/health", (req, res) => {
-  res.json({ status: "ok", service: "api-gateway" });
+  res.json({ status: "ok", service: "digital-exp-api" });
 });
 
 app.use(serviceHostRouter);
@@ -31,5 +31,5 @@ app.use((err, req, res, next) => {
 });
 
 app.listen(port, () => {
-  console.log(`API Gateway listening on http://localhost:${port}`);
+  console.log(`Digital Experience API listening on http://localhost:${port}`);
 });

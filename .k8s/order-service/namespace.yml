@@ -1,6 +1,6 @@
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: domain-service-v3
+  name: domain-services-v3
   labels:
     istio-injection: enabled
